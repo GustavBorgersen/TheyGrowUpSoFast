@@ -53,8 +53,14 @@ Login, OAuth callback, dashboard, proxy-image, useGooglePhotosPicker.
 
 **Current blocker**: Google Cloud Console + Supabase OAuth setup needed before this can be tested.
 
-### Phase 5 — Project Processing 🔲
-Project detail page, PhotoGrid, full add/generate flow, persistence.
+### Phase 5 — Project Processing ✅
+Project detail page with explicit reference photo step, PhotoGrid with filter controls, full add/generate flow with persistent reference descriptor.
+
+Key design: "Explicit Reference → Store Aligned → Filter at Generate"
+- Step 1: User picks a single reference photo → descriptor saved to `projects.reference_descriptor`
+- Step 2: Add photos in batches → all matching faces stored with `profile_score` + `descriptor` (no profile filtering at add time)
+- Step 3: Generate video with profile filter slider → only passing photos included
+- Reference stays consistent across sessions (loaded from DB, not reset per batch)
 
 ### Phase 6 — Mobile Polish + Error Handling 🔲
 Error boundaries, iOS video fixes, exponential backoff on uploads.
@@ -75,3 +81,6 @@ Vercel env vars, Supabase Google OAuth, storage RLS, Google Cloud Console verifi
 | 2026-03 | Remove tf.tidy() from async detection | tidy() is synchronous — cannot await inside it |
 | 2026-03 | Skip indicators on thumbnails | Cleaner than a separate skipped-photos dropdown |
 | 2026-03 | Upload-then-generate UX | Better than processing on drop; lets user review before committing |
+| 2026-03 | Explicit reference photo step | Fixes batch-reset bug: `let reference = null` in each `handleAddPhotos()` call caused alignment drift |
+| 2026-03 | Store all faces, filter at generate | Profiles/angled photos are still aligned and stored — user filters them with a slider at generate time |
+| 2026-03 | Per-photo descriptor + profile_score | Enables future "change reference" feature and client-side filtering without re-downloading |

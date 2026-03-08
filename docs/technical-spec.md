@@ -36,6 +36,16 @@ Cross-Origin-Embedder-Policy: require-corp
 ## Data Model
 See `supabase/schema.sql` for full DDL + RLS policies.
 
+### Reference Descriptor Flow
+Each project stores a `reference_descriptor` (FLOAT8 array) — the face descriptor from the user's chosen reference photo. This is the "anchor face" that all other photos align against. The reference is set once via an explicit "Pick reference photo" step, then loaded from DB for all subsequent batches. This eliminates the bug where `let reference = null` in `handleAddPhotos()` caused each batch to align to a different first face.
+
+### Per-Photo Metadata
+Each `project_photo` stores:
+- `profile_score` (FLOAT8) — how much the face is turned (0 = frontal, 1 = full profile)
+- `descriptor` (FLOAT8[]) — the 128-dim face descriptor for future "change reference" feature
+
+Photos are only skipped (not stored) for `no_face` or `identity_mismatch`. Profile filtering happens at generate time via a client-side slider, not at add time.
+
 ### ID Design
 All storage paths and internal references use our own `id` (UUID), never the provider ID. Google's `source_id` is stored for reference only. This keeps the system source-agnostic.
 
@@ -43,11 +53,16 @@ All storage paths and internal references use our own `id` (UUID), never the pro
 ```
 media/
   thumbnails/{userId}/{projectId}/{photoId}.jpg   (~10KB, 300px)
-  frames/{userId}/{projectId}/{photoId}.jpg       (~200KB, 1080×1350)
+  frames/{userId}/{projectId}/{photoId}.jpg       (~150KB, 1080×1350)
 ```
 
+### Storage Budget
+- Reference photo: ~150KB aligned frame + ~15KB thumbnail
+- Per photo: ~150KB aligned frame + ~15KB thumbnail ≈ 165KB
+- 60 photos: ~10MB per project → ~100 projects per 1GB
+
 ### Why Pre-Aligned Frames
-Google Photos Picker `baseUrl` tokens expire in ~1h and cannot be refreshed via the Library API after March 2025 (confirmed via official Google docs). The `photoslibrary.readonly.appcreateddata` scope only covers app-uploaded photos — it does NOT work for Picker-selected user photos. Pre-aligned frames are derived/processed data. At ~200KB each, 50 photos = ~10MB, comfortable on Supabase 1GB free tier.
+Google Photos Picker `baseUrl` tokens expire in ~1h and cannot be refreshed via the Library API after March 2025 (confirmed via official Google docs). The `photoslibrary.readonly.appcreateddata` scope only covers app-uploaded photos — it does NOT work for Picker-selected user photos. Pre-aligned frames are derived/processed data. At ~150KB each, 60 photos = ~10MB, comfortable on Supabase 1GB free tier.
 
 ## Face Alignment Algorithm (`src/lib/faceAlign.ts`)
 ```

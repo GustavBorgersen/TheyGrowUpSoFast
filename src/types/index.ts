@@ -4,6 +4,7 @@ export type Project = {
   name: string
   created_at: string
   settings: { maxProfileScore: number }
+  reference_descriptor: number[] | null
 }
 
 export type ProjectPhoto = {
@@ -18,6 +19,8 @@ export type ProjectPhoto = {
   order_index: number
   skipped: boolean
   skip_reason: string | null
+  profile_score: number | null
+  descriptor: number[] | null
 }
 
 export type ProcessingStatus =

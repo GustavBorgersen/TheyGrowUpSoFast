@@ -5,7 +5,8 @@ CREATE TABLE projects (
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   name TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  settings JSONB DEFAULT '{"maxProfileScore": 0.4}'::jsonb
+  settings JSONB DEFAULT '{"maxProfileScore": 0.4}'::jsonb,
+  reference_descriptor FLOAT8[]
 );
 
 CREATE TABLE project_photos (
@@ -21,7 +22,9 @@ CREATE TABLE project_photos (
   create_time TIMESTAMPTZ,       -- photo's original date, used for ordering
   order_index INTEGER NOT NULL,
   skipped BOOLEAN DEFAULT FALSE,
-  skip_reason TEXT               -- 'profile_angle' | 'identity_mismatch' | 'no_face'
+  skip_reason TEXT,              -- 'identity_mismatch' | 'no_face'
+  profile_score FLOAT8,
+  descriptor FLOAT8[]
 );
 
 -- Row Level Security

@@ -17,7 +17,7 @@ Upload photos of a person over time → get a timelapse video where their face s
 
 **First-photo rule** (shown prominently): *"The oldest photo sets the reference face. Make sure it has one face clearly visible and looking at the camera."*
 
-**Skip indicators on thumbnails**: skipped photos show red ring + faded opacity + label (`No face`, `Profile`, `Wrong person`)
+**Skip indicators on thumbnails**: skipped photos show faded opacity + label (`No face`, `Wrong person`). Profile-filtered photos show amber "Filtered" badge. Profile scores shown as percentage overlay on all thumbnails.
 
 ### Free Account (Google sign-in)
 - Sign in with Google
@@ -48,11 +48,14 @@ Upload photos of a person over time → get a timelapse video where their face s
 1. Sign in with Google at `/login`
 2. Dashboard at `/dashboard` — list of projects, "New project" button
 3. New project: enter name → create row → redirect to `/project/[id]`
-4. Project page: "Add Photos" → Google Photos Picker opens
-5. Photos processed in batches of 3 — thumbnails appear as they complete
-6. Skipped photos show skip reason badge
-7. "Generate Video" → downloads MP4
-8. Project persists; return anytime, regenerate without re-picking
+4. Project page starts in "no reference" state — user picks a single reference photo
+5. Reference photo sets the anchor face (descriptor saved to DB) — all future photos align to it
+6. "Add Photos" → Google Photos Picker opens → batch processed against reference descriptor
+7. All matching faces stored (including profiles) — only no-face and identity-mismatch skipped
+8. Profile filter slider controls which photos are included at generate time
+9. "Generate Video (N photos)" → encodes only photos passing the current filter
+10. Add more photos across sessions — reference stays consistent (loaded from DB, never resets)
+11. Adjust filter and re-generate without re-downloading or re-aligning
 
 ## UX Rules
 - Touch targets ≥ 44×44px
@@ -71,5 +74,6 @@ Upload photos of a person over time → get a timelapse video where their face s
 ## Copy
 - Hero: "Watch them grow — one photo at a time"
 - How it works: 3 steps (Upload → Align → Download)
-- First-photo warning: "The oldest photo sets the reference face. Make sure it has one face clearly visible and looking at the camera."
+- Reference prompt: "Pick a reference photo to set the anchor face. All other photos will be aligned to match it."
+- First-photo warning (guest): "The oldest photo sets the reference face. Make sure it has one face clearly visible and looking at the camera."
 - Token expiry banner: "Google Photos access expired — click to reconnect"

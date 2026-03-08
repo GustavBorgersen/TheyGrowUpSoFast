@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -61,8 +61,29 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [projectName, setProjectName] = useState(project.name)
   const [editingName, setEditingName] = useState(false)
+  const [referenceDescriptor, setReferenceDescriptor] = useState<number[] | null>(project.reference_descriptor)
+  const [profileThreshold, setProfileThreshold] = useState(project.settings.maxProfileScore)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  const hasReference = referenceDescriptor !== null
+
+  // Compute filtered-out photo IDs based on profile threshold
+  const filteredOutIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const p of photos) {
+      if (p.skipped) continue
+      if (p.profile_score != null && p.profile_score > profileThreshold) {
+        ids.add(p.id)
+      }
+    }
+    return ids
+  }, [photos, profileThreshold])
+
+  const includedPhotos = useMemo(() =>
+    photos.filter(p => !p.skipped && p.aligned_frame_path && !filteredOutIds.has(p.id)),
+    [photos, filteredOutIds]
+  )
 
   // Generate signed URLs for thumbnails (private bucket)
   useEffect(() => {
@@ -91,9 +112,146 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
     return data.signedUrl
   }
 
+  async function getProviderToken(): Promise<string | null> {
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.provider_token ?? null
+  }
+
+  // ── Step 1: Set Reference Photo ──
+
+  async function handleSetReference() {
+    if (!faceApi) {
+      setErrorMsg('Face detection models are still loading. Please wait.')
+      return
+    }
+
+    setErrorMsg(null)
+    setSkipped([])
+
+    let googlePhotos
+    try {
+      googlePhotos = await openPicker()
+    } catch (err) {
+      console.error('[handleSetReference] openPicker threw:', err)
+      return
+    }
+
+    if (googlePhotos.length === 0) return
+
+    const providerToken = await getProviderToken()
+    if (!providerToken) {
+      setErrorMsg('Google Photos access expired. Please sign in again.')
+      return
+    }
+
+    // Use only the first photo as reference
+    const refPhoto = googlePhotos[0]
+
+    setStatus('detecting')
+    setTotal(1)
+    setCurrent(1)
+
+    let proxyUrl: string
+    try {
+      const res = await fetch('/api/proxy-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: `${refPhoto.baseUrl}=w2048`, token: providerToken }),
+      })
+      if (!res.ok) throw new Error(`Proxy failed: ${res.status}`)
+      proxyUrl = URL.createObjectURL(await res.blob())
+    } catch {
+      setErrorMsg('Failed to download reference photo. Please try again.')
+      setStatus('idle')
+      return
+    }
+
+    let img: HTMLImageElement
+    try {
+      img = await loadImageFromUrl(proxyUrl)
+    } catch {
+      URL.revokeObjectURL(proxyUrl)
+      setErrorMsg('Failed to load reference photo.')
+      setStatus('idle')
+      return
+    }
+
+    if (!canvasRef.current) { URL.revokeObjectURL(proxyUrl); setStatus('idle'); return }
+
+    setStatus('aligning')
+    // Use a very high maxProfileScore — we want the reference to succeed unless extreme profile
+    const result = await detectAndAlign(faceApi, img, canvasRef.current, null, 0.8)
+    URL.revokeObjectURL(proxyUrl)
+
+    if (result.skipped) {
+      setErrorMsg(`Could not detect a face in the selected photo (${result.reason}). Please pick another.`)
+      setStatus('idle')
+      return
+    }
+
+    // Store aligned frame + thumbnail
+    const ourId = crypto.randomUUID()
+    const framePath = `frames/${userId}/${project.id}/${ourId}.jpg`
+    const thumbPath = `thumbnails/${userId}/${project.id}/${ourId}.jpg`
+
+    const snapshot = document.createElement('canvas')
+    snapshot.width = result.canvas.width
+    snapshot.height = result.canvas.height
+    snapshot.getContext('2d')!.drawImage(result.canvas, 0, 0)
+
+    const frameBlob = await new Promise<Blob>((res, rej) =>
+      snapshot.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/jpeg', 0.85)
+    )
+
+    const thumbCanvas = document.createElement('canvas')
+    const thumbH = Math.round(snapshot.height * (300 / snapshot.width))
+    thumbCanvas.width = 300
+    thumbCanvas.height = thumbH
+    thumbCanvas.getContext('2d')!.drawImage(snapshot, 0, 0, 300, thumbH)
+    const thumbBlob = await new Promise<Blob>((res, rej) =>
+      thumbCanvas.toBlob(b => b ? res(b) : rej(new Error('thumb toBlob failed')), 'image/jpeg', 0.80)
+    )
+
+    await withRetry(() => supabase.storage.from('media').upload(framePath, frameBlob, { contentType: 'image/jpeg', upsert: true }).then(r => { if (r.error) throw r.error }))
+    await withRetry(() => supabase.storage.from('media').upload(thumbPath, thumbBlob, { contentType: 'image/jpeg', upsert: true }).then(r => { if (r.error) throw r.error }))
+
+    // Save descriptor to DB
+    const descriptorArray = Array.from(result.descriptor)
+    await supabase.from('projects').update({ reference_descriptor: descriptorArray }).eq('id', project.id)
+
+    // Insert photo row
+    const { data: insertedPhoto } = await supabase.from('project_photos').insert({
+      id: ourId,
+      project_id: project.id,
+      source: 'google_photos',
+      source_id: refPhoto.id,
+      source_meta: { createTime: refPhoto.createTime },
+      thumbnail_path: thumbPath,
+      aligned_frame_path: framePath,
+      create_time: refPhoto.createTime,
+      order_index: 0,
+      skipped: false,
+      profile_score: result.profileScore,
+      descriptor: descriptorArray,
+    }).select('*').single()
+
+    if (insertedPhoto) {
+      setPhotos(prev => [...prev, insertedPhoto as ProjectPhoto].sort((a, b) => (a.create_time ?? '').localeCompare(b.create_time ?? '')))
+    }
+
+    setReferenceDescriptor(descriptorArray)
+    setStatus('idle')
+  }
+
+  // ── Step 2: Add Photos (batch, repeatable) ──
+
   async function handleAddPhotos() {
     if (!faceApi) {
       setErrorMsg('Face detection models are still loading. Please wait.')
+      return
+    }
+    if (!referenceDescriptor) {
+      setErrorMsg('Set a reference photo first.')
       return
     }
 
@@ -111,15 +269,13 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
     console.log('[addPhotos] picker returned', googlePhotos.length, 'photos')
     if (googlePhotos.length === 0) return
 
-    // Get Google OAuth token — needed to download Picker mediaFile URLs
-    const { data: { session } } = await supabase.auth.getSession()
-    const providerToken = session?.provider_token ?? null
+    const providerToken = await getProviderToken()
     if (!providerToken) {
       setErrorMsg('Google Photos access expired. Please sign in again.')
       return
     }
 
-    // Find existing source IDs to avoid duplicates
+    // Deduplicate
     const existingIds = new Set(photos.map(p => p.source_id).filter(Boolean))
     const newPhotos = googlePhotos.filter(p => !existingIds.has(p.id))
     if (newPhotos.length === 0) {
@@ -131,14 +287,14 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
     setTotal(newPhotos.length)
     setCurrent(0)
 
-    let reference: Float32Array | null = null
+    const reference = new Float32Array(referenceDescriptor)
     const maxOrder = photos.reduce((max, p) => Math.max(max, p.order_index), -1)
     let orderIndex = maxOrder + 1
 
-    // Process sequentially — shared canvas can't be used concurrently
     for (let i = 0; i < newPhotos.length; i++) {
       const googlePhoto = newPhotos[i]
       setCurrent(i + 1)
+
       let proxyUrl: string
       try {
         const res = await fetch('/api/proxy-image', {
@@ -169,17 +325,13 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
       const thumbPath = `thumbnails/${userId}/${project.id}/${ourId}.jpg`
 
       setStatus('aligning')
-      const result = await detectAndAlign(
-        faceApi,
-        img,
-        canvasRef.current,
-        reference,
-        project.settings.maxProfileScore
-      )
+      // Use very high maxProfileScore — store ALL matching faces, filter at generate time
+      const result = await detectAndAlign(faceApi, img, canvasRef.current, reference, 999)
       setStatus('detecting')
       URL.revokeObjectURL(proxyUrl)
 
       if (result.skipped) {
+        // Only no_face or identity_mismatch can happen (profile never triggers with 999 threshold)
         setSkipped(prev => [...prev, { name: googlePhoto.id, reason: result.reason }])
         await supabase.from('project_photos').insert({
           id: ourId,
@@ -195,9 +347,7 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
         continue
       }
 
-      if (reference === null) reference = result.descriptor
-
-      // Snapshot the canvas before it gets reused for the next photo
+      // Snapshot canvas before reuse
       const snapshot = document.createElement('canvas')
       snapshot.width = result.canvas.width
       snapshot.height = result.canvas.height
@@ -219,6 +369,7 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
       await withRetry(() => supabase.storage.from('media').upload(framePath, frameBlob, { contentType: 'image/jpeg', upsert: true }).then(r => { if (r.error) throw r.error }))
       await withRetry(() => supabase.storage.from('media').upload(thumbPath, thumbBlob, { contentType: 'image/jpeg', upsert: true }).then(r => { if (r.error) throw r.error }))
 
+      const descriptorArray = Array.from(result.descriptor)
       const { data: insertedPhoto } = await supabase.from('project_photos').insert({
         id: ourId,
         project_id: project.id,
@@ -230,6 +381,8 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
         create_time: googlePhoto.createTime,
         order_index: orderIndex++,
         skipped: false,
+        profile_score: result.profileScore,
+        descriptor: descriptorArray,
       }).select('*').single()
 
       if (insertedPhoto) {
@@ -240,10 +393,11 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
     setStatus('idle')
   }
 
+  // ── Step 3: Generate Video (with filter) ──
+
   async function handleGenerateVideo() {
-    const nonSkipped = photos.filter(p => !p.skipped && p.aligned_frame_path)
-    if (nonSkipped.length === 0) {
-      setErrorMsg('No aligned photos available to generate a video.')
+    if (includedPhotos.length === 0) {
+      setErrorMsg('No photos pass the current filter.')
       return
     }
 
@@ -252,10 +406,8 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
     setErrorMsg(null)
 
     try {
-      // Get signed URLs for each frame
-      const signedUrls = await Promise.all(nonSkipped.map(p => getSignedUrl(p.aligned_frame_path!)))
+      const signedUrls = await Promise.all(includedPhotos.map(p => getSignedUrl(p.aligned_frame_path!)))
 
-      // Load frames as canvases
       const frames: HTMLCanvasElement[] = []
       for (const url of signedUrls) {
         const img = await loadImageFromUrl(url)
@@ -280,10 +432,8 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
     const photo = photos.find(p => p.id === photoId)
     if (!photo) return
 
-    // Optimistic update
     setPhotos(prev => prev.filter(p => p.id !== photoId))
 
-    // Delete storage files
     if (photo.aligned_frame_path) {
       await supabase.storage.from('media').remove([photo.aligned_frame_path])
     }
@@ -297,7 +447,6 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
     const confirmed = window.confirm(`Delete project "${projectName}"? This cannot be undone.`)
     if (!confirmed) return
 
-    // Delete all storage files
     const paths = [
       ...photos.map(p => p.aligned_frame_path).filter(Boolean) as string[],
       ...photos.map(p => p.thumbnail_path).filter(Boolean) as string[],
@@ -320,6 +469,7 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
   }
 
   const isProcessing = status === 'detecting' || status === 'aligning'
+  const nonSkippedCount = photos.filter(p => !p.skipped && p.aligned_frame_path).length
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white px-4 py-12">
@@ -327,7 +477,7 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
         {/* Header */}
         <header className="flex items-start justify-between gap-4">
           <div className="space-y-1">
-            <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-zinc-300">← Dashboard</Link>
+            <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-zinc-300">&larr; Dashboard</Link>
             {editingName ? (
               <input
                 autoFocus
@@ -376,7 +526,7 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
               }}
               className="underline hover:no-underline"
             >
-              Click to reconnect →
+              Click to reconnect &rarr;
             </button>
           </div>
         )}
@@ -393,31 +543,61 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
           </p>
         )}
 
-        {/* Actions */}
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={handleAddPhotos}
-            disabled={isProcessing || pickerOpen || !faceApiLoaded}
-            className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition min-h-[44px]"
-          >
-            {pickerOpen ? 'Picker open…' : isProcessing ? 'Processing…' : !faceApiLoaded ? 'Loading models…' : '+ Add photos'}
-          </button>
-
-          {photos.filter(p => !p.skipped).length > 0 && (
+        {/* State 1: No reference — prompt to set one */}
+        {!hasReference && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-blue-800/50 bg-blue-950/30 px-4 py-3 text-sm text-blue-300">
+              Pick a reference photo to set the anchor face. All other photos will be aligned to match it.
+            </div>
             <button
-              onClick={handleGenerateVideo}
-              disabled={status === 'encoding'}
-              className="rounded-xl border border-zinc-700 px-5 py-3 text-sm font-medium text-zinc-200 hover:border-zinc-500 disabled:opacity-50 transition min-h-[44px]"
+              onClick={handleSetReference}
+              disabled={isProcessing || pickerOpen || !faceApiLoaded}
+              className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition min-h-[44px]"
             >
-              {status === 'encoding' ? 'Encoding…' : 'Generate video'}
+              {pickerOpen ? 'Picker open\u2026' : isProcessing ? 'Processing\u2026' : !faceApiLoaded ? 'Loading models\u2026' : 'Pick reference photo'}
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* First-photo hint */}
-        {photos.length === 0 && (
-          <div className="rounded-xl border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-300">
-            The first photo sets the face. Pick your oldest photo first.
+        {/* State 2+3: Reference set — show add + generate actions */}
+        {hasReference && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={handleAddPhotos}
+                disabled={isProcessing || pickerOpen || !faceApiLoaded}
+                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition min-h-[44px]"
+              >
+                {pickerOpen ? 'Picker open\u2026' : isProcessing ? 'Processing\u2026' : !faceApiLoaded ? 'Loading models\u2026' : '+ Add photos'}
+              </button>
+
+              {nonSkippedCount > 0 && (
+                <button
+                  onClick={handleGenerateVideo}
+                  disabled={status === 'encoding' || includedPhotos.length === 0}
+                  className="rounded-xl border border-zinc-700 px-5 py-3 text-sm font-medium text-zinc-200 hover:border-zinc-500 disabled:opacity-50 transition min-h-[44px]"
+                >
+                  {status === 'encoding' ? 'Encoding\u2026' : `Generate video (${includedPhotos.length} photos)`}
+                </button>
+              )}
+            </div>
+
+            {/* Profile filter slider */}
+            {nonSkippedCount > 0 && (
+              <div className="flex items-center gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3">
+                <label className="text-sm text-zinc-400 shrink-0">Profile filter</label>
+                <input
+                  type="range"
+                  min={0.1}
+                  max={1.0}
+                  step={0.05}
+                  value={profileThreshold}
+                  onChange={e => setProfileThreshold(parseFloat(e.target.value))}
+                  className="flex-1 accent-blue-500"
+                />
+                <span className="text-sm text-zinc-300 w-12 text-right">{(profileThreshold * 100).toFixed(0)}%</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -443,6 +623,8 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
           photos={photos}
           getThumbnailUrl={getThumbnailUrl}
           onRemove={handleRemovePhoto}
+          filteredOutIds={filteredOutIds}
+          showScores={nonSkippedCount > 0}
         />
 
         {/* Video */}
