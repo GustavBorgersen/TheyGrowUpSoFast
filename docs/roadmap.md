@@ -1,9 +1,9 @@
 # TheyGrowUpSoFast — Roadmap
 
-## MVP Learnings (from `/mnt/c/Users/zealotry/source/repos/ideas/ideas/TheyGrowUpSoFast`)
+## MVP Learnings (from original monorepo)
 
 ### What worked
-- Face alignment algorithm is solid — eyes are level and centered across all frames
+- Face alignment algorithm is solid — eyes level and centered across all frames
 - WebGL backend for face-api is fast enough on desktop
 - FFmpeg WASM encoding works reliably in the browser
 - Google Photos Picker flow is smooth on desktop
@@ -29,25 +29,38 @@ At ~200KB per frame, 50 photos = ~10MB. Comfortable on Supabase 1GB free tier.
 ## Phases
 
 ### Phase 1 — Foundation ✅
-Config, types, DB schema, Supabase auth plumbing, docs
+Config, types, DB schema, Supabase auth plumbing, docs.
 
 ### Phase 2 — Core Engine ✅
-`faceAlign.ts`, `useFaceApi.ts`, `useVideoGenerator.ts`, model files
+`faceAlign.ts`, `useFaceApi.ts`, `useVideoGenerator.ts`, model files.
+
+Key fix discovered: `tf.tidy()` cannot wrap async detection calls — removed it.
+Key fix discovered: Do not import `@tensorflow/tfjs-backend-webgl` alongside face-api — duplicate kernel registrations.
+Key fix discovered: Turbopack incompatible with face-api dynamic imports — forced `--webpack`.
 
 ### Phase 3 — Landing + Guest Mode ✅
-Landing page, guest flow, ProcessingView, VideoPlayer
+Landing page, guest flow, ProcessingView, VideoPlayer.
 
-### Phase 4 — Auth + Dashboard ✅
-Login, OAuth callback, dashboard, proxy-image, useGooglePhotosPicker
+Guest flow improvements over original plan:
+- Upload photos first → thumbnails shown immediately
+- Add/remove photos before generating
+- "Generate" button is explicit user action
+- Skipped photos shown inline on thumbnail grid (red ring + label), not in a separate dropdown
+- Photos persist after generation for easy add-more + regenerate workflow
 
-### Phase 5 — Project Processing ✅
-Project detail page, PhotoGrid, full add/generate flow, persistence
+### Phase 4 — Auth + Dashboard 🔲
+Login, OAuth callback, dashboard, proxy-image, useGooglePhotosPicker.
 
-### Phase 6 — Mobile Polish + Error Handling ✅
-Error boundaries, SharedArrayBuffer check, iOS video fixes, exponential backoff
+**Current blocker**: Google Cloud Console + Supabase OAuth setup needed before this can be tested.
 
-### Phase 7 — Deployment ✅
-Vercel env vars, Supabase Google OAuth, storage RLS, Google Cloud Console
+### Phase 5 — Project Processing 🔲
+Project detail page, PhotoGrid, full add/generate flow, persistence.
+
+### Phase 6 — Mobile Polish + Error Handling 🔲
+Error boundaries, iOS video fixes, exponential backoff on uploads.
+
+### Phase 7 — Deployment 🔲
+Vercel env vars, Supabase Google OAuth, storage RLS, Google Cloud Console verification.
 
 ## Decision Log
 
@@ -58,3 +71,7 @@ Vercel env vars, Supabase Google OAuth, storage RLS, Google Cloud Console
 | 2026-03 | No monorepo | Flat Next.js is simpler; no need for turborepo overhead |
 | 2026-03 | Guest mode first | Lowers barrier; proves value before requiring sign-in |
 | 2026-03 | Paid mode deferred | Free tier covers MVP; add payments when there's demand |
+| 2026-03 | Force webpack (not Turbopack) | face-api dynamic imports incompatible with Turbopack |
+| 2026-03 | Remove tf.tidy() from async detection | tidy() is synchronous — cannot await inside it |
+| 2026-03 | Skip indicators on thumbnails | Cleaner than a separate skipped-photos dropdown |
+| 2026-03 | Upload-then-generate UX | Better than processing on drop; lets user review before committing |
