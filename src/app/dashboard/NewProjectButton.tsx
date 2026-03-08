@@ -8,6 +8,7 @@ export function NewProjectButton() {
   const [isOpen, setIsOpen] = useState(false)
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   async function createProject(e: React.FormEvent) {
@@ -16,13 +17,17 @@ export function NewProjectButton() {
 
     setLoading(true)
     const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setLoading(false); return }
+
     const { data, error } = await supabase
       .from('projects')
-      .insert({ name: name.trim() })
+      .insert({ name: name.trim(), user_id: user.id })
       .select('id')
       .single()
 
     if (error || !data) {
+      setError(error?.message ?? 'Failed to create project')
       setLoading(false)
       return
     }
@@ -42,6 +47,8 @@ export function NewProjectButton() {
   }
 
   return (
+    <div className="space-y-2">
+    {error && <p className="text-sm text-red-400">{error}</p>}
     <form onSubmit={createProject} className="flex gap-3">
       <input
         autoFocus
@@ -66,5 +73,6 @@ export function NewProjectButton() {
         Cancel
       </button>
     </form>
+    </div>
   )
 }

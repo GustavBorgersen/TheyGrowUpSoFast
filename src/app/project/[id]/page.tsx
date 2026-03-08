@@ -22,7 +22,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     .from('project_photos')
     .select('*')
     .eq('project_id', id)
-    .order('order_index', { ascending: true })
+    .order('create_time', { ascending: true })
 
   return (
     <ProjectClient

@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -12,8 +12,6 @@ import { PhotoGrid } from '@/components/PhotoGrid'
 import { ProcessingView } from '@/components/ProcessingView'
 import { VideoPlayer } from '@/components/VideoPlayer'
 import type { Project, ProjectPhoto, ProcessingStatus, SkipReason } from '@/types'
-
-const BATCH_SIZE = 3
 
 type SkippedPhoto = { name: string; reason: SkipReason }
 
@@ -54,6 +52,7 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
   const { openPicker, isOpen: pickerOpen, error: pickerError, tokenExpired } = useGooglePhotosPicker()
 
   const [photos, setPhotos] = useState<ProjectPhoto[]>(initialPhotos)
+  const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({})
   const [status, setStatus] = useState<ProcessingStatus>('idle')
   const [current, setCurrent] = useState(0)
   const [total, setTotal] = useState(0)
@@ -65,11 +64,25 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
+  // Generate signed URLs for thumbnails (private bucket)
+  useEffect(() => {
+    const paths = photos
+      .map(p => p.thumbnail_path)
+      .filter((p): p is string => !!p && !thumbUrls[p])
+    if (paths.length === 0) return
+
+    supabase.storage.from('media').createSignedUrls(paths, 3600).then(({ data }) => {
+      if (!data) return
+      const newUrls: Record<string, string> = {}
+      for (const item of data) {
+        if (item.signedUrl && item.path) newUrls[item.path] = item.signedUrl
+      }
+      setThumbUrls(prev => ({ ...prev, ...newUrls }))
+    })
+  }, [photos])
+
   function getThumbnailUrl(path: string): string {
-    const { data } = supabase.storage.from('media').getPublicUrl(path)
-    // Use signed URL for private bucket — this is a public URL placeholder
-    // In production use: supabase.storage.from('media').createSignedUrl(path, 3600)
-    return data.publicUrl
+    return thumbUrls[path] ?? ''
   }
 
   async function getSignedUrl(path: string): Promise<string> {
@@ -90,16 +103,18 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
     let googlePhotos
     try {
       googlePhotos = await openPicker()
-    } catch {
+    } catch (err) {
+      console.error('[handleAddPhotos] openPicker threw:', err)
       return
     }
 
+    console.log('[addPhotos] picker returned', googlePhotos.length, 'photos')
     if (googlePhotos.length === 0) return
 
-    // Get provider token for proxy
+    // Get Google OAuth token — needed to download Picker mediaFile URLs
     const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.provider_token
-    if (!token) {
+    const providerToken = session?.provider_token ?? null
+    if (!providerToken) {
       setErrorMsg('Google Photos access expired. Please sign in again.')
       return
     }
@@ -107,7 +122,6 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
     // Find existing source IDs to avoid duplicates
     const existingIds = new Set(photos.map(p => p.source_id).filter(Boolean))
     const newPhotos = googlePhotos.filter(p => !existingIds.has(p.id))
-
     if (newPhotos.length === 0) {
       setErrorMsg('All selected photos are already in this project.')
       return
@@ -117,116 +131,110 @@ export function ProjectClient({ project, initialPhotos, userId }: Props) {
     setTotal(newPhotos.length)
     setCurrent(0)
 
-    // Build reference descriptor from existing non-skipped photos (use most recent)
     let reference: Float32Array | null = null
-    // (reference will be set from the first successfully aligned photo in this batch
-    //  or inherited from an earlier batch via a stored descriptor — simplified: use first aligned)
-
     const maxOrder = photos.reduce((max, p) => Math.max(max, p.order_index), -1)
     let orderIndex = maxOrder + 1
 
-    // Process in batches of BATCH_SIZE
-    for (let i = 0; i < newPhotos.length; i += BATCH_SIZE) {
-      const batch = newPhotos.slice(i, i + BATCH_SIZE)
+    // Process sequentially — shared canvas can't be used concurrently
+    for (let i = 0; i < newPhotos.length; i++) {
+      const googlePhoto = newPhotos[i]
+      setCurrent(i + 1)
+      let proxyUrl: string
+      try {
+        const res = await fetch('/api/proxy-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: `${googlePhoto.baseUrl}=w2048`, token: providerToken }),
+        })
+        if (!res.ok) throw new Error(`Proxy failed: ${res.status}`)
+        proxyUrl = URL.createObjectURL(await res.blob())
+      } catch {
+        setSkipped(prev => [...prev, { name: googlePhoto.id, reason: 'no_face' }])
+        continue
+      }
 
-      await Promise.all(batch.map(async (googlePhoto, batchIdx) => {
-        const globalIdx = i + batchIdx
-        setCurrent(prev => Math.max(prev, globalIdx + 1))
-
-        // Fetch via proxy (appends =w2048 for higher quality)
-        const proxyUrl = await (async () => {
-          const res = await fetch('/api/proxy-image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: `${googlePhoto.baseUrl}=w2048`, token }),
-          })
-          if (!res.ok) throw new Error(`Proxy failed: ${res.status}`)
-          const blob = await res.blob()
-          return URL.createObjectURL(blob)
-        })()
-
-        let img: HTMLImageElement
-        try {
-          img = await loadImageFromUrl(proxyUrl)
-        } catch {
-          URL.revokeObjectURL(proxyUrl)
-          setSkipped(prev => [...prev, { name: googlePhoto.id, reason: 'no_face' }])
-          return
-        }
-
-        const ourId = crypto.randomUUID()
-        const framePath = `frames/${userId}/${project.id}/${ourId}.jpg`
-        const thumbPath = `thumbnails/${userId}/${project.id}/${ourId}.jpg`
-
-        if (!canvasRef.current) { URL.revokeObjectURL(proxyUrl); return }
-
-        setStatus('aligning')
-        const result = await detectAndAlign(
-          faceApi,
-          img,
-          canvasRef.current,
-          reference,
-          project.settings.maxProfileScore
-        )
-        setStatus('detecting')
+      let img: HTMLImageElement
+      try {
+        img = await loadImageFromUrl(proxyUrl)
+      } catch {
         URL.revokeObjectURL(proxyUrl)
+        setSkipped(prev => [...prev, { name: googlePhoto.id, reason: 'no_face' }])
+        continue
+      }
 
-        if (result.skipped) {
-          setSkipped(prev => [...prev, { name: googlePhoto.id, reason: result.reason }])
-          // Insert skipped row
-          await supabase.from('project_photos').insert({
-            id: ourId,
-            project_id: project.id,
-            source: 'google_photos',
-            source_id: googlePhoto.id,
-            source_meta: { createTime: googlePhoto.createTime },
-            create_time: googlePhoto.createTime,
-            order_index: orderIndex++,
-            skipped: true,
-            skip_reason: result.reason,
-          })
-          return
-        }
+      if (!canvasRef.current) { URL.revokeObjectURL(proxyUrl); break }
 
-        if (reference === null) reference = result.descriptor
+      const ourId = crypto.randomUUID()
+      const framePath = `frames/${userId}/${project.id}/${ourId}.jpg`
+      const thumbPath = `thumbnails/${userId}/${project.id}/${ourId}.jpg`
 
-        // Export aligned frame as JPEG blob
-        const frameBlob = await new Promise<Blob>((res, rej) =>
-          result.canvas.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/jpeg', 0.85)
-        )
+      setStatus('aligning')
+      const result = await detectAndAlign(
+        faceApi,
+        img,
+        canvasRef.current,
+        reference,
+        project.settings.maxProfileScore
+      )
+      setStatus('detecting')
+      URL.revokeObjectURL(proxyUrl)
 
-        // Generate 300px thumbnail from same canvas
-        const thumbCanvas = document.createElement('canvas')
-        const thumbH = Math.round(result.canvas.height * (300 / result.canvas.width))
-        thumbCanvas.width = 300
-        thumbCanvas.height = thumbH
-        thumbCanvas.getContext('2d')!.drawImage(result.canvas, 0, 0, 300, thumbH)
-        const thumbBlob = await new Promise<Blob>((res, rej) =>
-          thumbCanvas.toBlob(b => b ? res(b) : rej(new Error('thumb toBlob failed')), 'image/jpeg', 0.80)
-        )
-
-        // Upload to Supabase storage with retry
-        await withRetry(() => supabase.storage.from('media').upload(framePath, frameBlob, { contentType: 'image/jpeg', upsert: true }).then(r => { if (r.error) throw r.error }))
-        await withRetry(() => supabase.storage.from('media').upload(thumbPath, thumbBlob, { contentType: 'image/jpeg', upsert: true }).then(r => { if (r.error) throw r.error }))
-
-        // Insert DB row
-        const { data: insertedPhoto } = await supabase.from('project_photos').insert({
+      if (result.skipped) {
+        setSkipped(prev => [...prev, { name: googlePhoto.id, reason: result.reason }])
+        await supabase.from('project_photos').insert({
           id: ourId,
           project_id: project.id,
           source: 'google_photos',
           source_id: googlePhoto.id,
           source_meta: { createTime: googlePhoto.createTime },
-          thumbnail_path: thumbPath,
-          aligned_frame_path: framePath,
           create_time: googlePhoto.createTime,
           order_index: orderIndex++,
-          skipped: false,
-        }).select('*').single()
+          skipped: true,
+          skip_reason: result.reason,
+        })
+        continue
+      }
 
-        if (insertedPhoto) {
-          setPhotos(prev => [...prev, insertedPhoto as ProjectPhoto].sort((a, b) => a.order_index - b.order_index))
-        }
-      }))
+      if (reference === null) reference = result.descriptor
+
+      // Snapshot the canvas before it gets reused for the next photo
+      const snapshot = document.createElement('canvas')
+      snapshot.width = result.canvas.width
+      snapshot.height = result.canvas.height
+      snapshot.getContext('2d')!.drawImage(result.canvas, 0, 0)
+
+      const frameBlob = await new Promise<Blob>((res, rej) =>
+        snapshot.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/jpeg', 0.85)
+      )
+
+      const thumbCanvas = document.createElement('canvas')
+      const thumbH = Math.round(snapshot.height * (300 / snapshot.width))
+      thumbCanvas.width = 300
+      thumbCanvas.height = thumbH
+      thumbCanvas.getContext('2d')!.drawImage(snapshot, 0, 0, 300, thumbH)
+      const thumbBlob = await new Promise<Blob>((res, rej) =>
+        thumbCanvas.toBlob(b => b ? res(b) : rej(new Error('thumb toBlob failed')), 'image/jpeg', 0.80)
+      )
+
+      await withRetry(() => supabase.storage.from('media').upload(framePath, frameBlob, { contentType: 'image/jpeg', upsert: true }).then(r => { if (r.error) throw r.error }))
+      await withRetry(() => supabase.storage.from('media').upload(thumbPath, thumbBlob, { contentType: 'image/jpeg', upsert: true }).then(r => { if (r.error) throw r.error }))
+
+      const { data: insertedPhoto } = await supabase.from('project_photos').insert({
+        id: ourId,
+        project_id: project.id,
+        source: 'google_photos',
+        source_id: googlePhoto.id,
+        source_meta: { createTime: googlePhoto.createTime },
+        thumbnail_path: thumbPath,
+        aligned_frame_path: framePath,
+        create_time: googlePhoto.createTime,
+        order_index: orderIndex++,
+        skipped: false,
+      }).select('*').single()
+
+      if (insertedPhoto) {
+        setPhotos(prev => [...prev, insertedPhoto as ProjectPhoto].sort((a, b) => (a.create_time ?? '').localeCompare(b.create_time ?? '')))
+      }
     }
 
     setStatus('idle')

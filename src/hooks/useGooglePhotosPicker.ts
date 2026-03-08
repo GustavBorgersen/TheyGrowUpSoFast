@@ -4,10 +4,23 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { GooglePhoto } from '@/types'
 
-const POLL_INTERVAL = 3000
-const POLL_TIMEOUT = 5 * 60 * 1000 // 5 minutes
+interface PollingConfig {
+  pollInterval: number // ms
+  timeoutIn: number // ms
+}
 
-async function createPickerSession(token: string): Promise<{ pickerUri: string; sessionId: string }> {
+/** Parse Google Duration string like "3.5s" into milliseconds */
+function parseDuration(duration: string | undefined, fallbackMs: number): number {
+  if (!duration) return fallbackMs
+  const match = duration.match(/^([\d.]+)s$/)
+  return match ? parseFloat(match[1]) * 1000 : fallbackMs
+}
+
+async function createPickerSession(token: string): Promise<{
+  pickerUri: string
+  sessionId: string
+  pollingConfig: PollingConfig
+}> {
   const res = await fetch('https://photospicker.googleapis.com/v1/sessions', {
     method: 'POST',
     headers: {
@@ -17,28 +30,52 @@ async function createPickerSession(token: string): Promise<{ pickerUri: string; 
   })
   if (!res.ok) throw Object.assign(new Error('Failed to create picker session'), { status: res.status })
   const data = await res.json()
-  return { pickerUri: data.pickerUri, sessionId: data.id }
+  return {
+    pickerUri: data.pickerUri,
+    sessionId: data.id,
+    pollingConfig: {
+      pollInterval: parseDuration(data.pollingConfig?.pollInterval, 3000),
+      timeoutIn: parseDuration(data.pollingConfig?.timeoutIn, 5 * 60 * 1000),
+    },
+  }
+}
+
+async function checkSession(
+  sessionId: string,
+  token: string
+): Promise<{ ready: boolean; pollingConfig: PollingConfig }> {
+  const res = await fetch(`https://photospicker.googleapis.com/v1/sessions/${sessionId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw Object.assign(new Error('Session poll failed'), { status: res.status })
+  const data = await res.json()
+  return {
+    ready: data.mediaItemsSet === true,
+    pollingConfig: {
+      pollInterval: parseDuration(data.pollingConfig?.pollInterval, 3000),
+      timeoutIn: parseDuration(data.pollingConfig?.timeoutIn, 5 * 60 * 1000),
+    },
+  }
 }
 
 async function pollSession(
   sessionId: string,
   token: string,
-  signal: AbortSignal
-): Promise<void> {
-  const deadline = Date.now() + POLL_TIMEOUT
-  while (Date.now() < deadline) {
-    if (signal.aborted) throw new Error('Picker cancelled')
-    await new Promise(r => setTimeout(r, POLL_INTERVAL))
-    if (signal.aborted) throw new Error('Picker cancelled')
+  initialPollingConfig: PollingConfig
+): Promise<boolean> {
+  const deadline = Date.now() + initialPollingConfig.timeoutIn
+  let pollInterval = initialPollingConfig.pollInterval
 
-    const res = await fetch(`https://photospicker.googleapis.com/v1/sessions/${sessionId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!res.ok) throw Object.assign(new Error('Session poll failed'), { status: res.status })
-    const data = await res.json()
-    if (data.mediaItemsSet) return
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, pollInterval))
+
+    const result = await checkSession(sessionId, token)
+    console.log('[picker] poll: ready=%s, pollInterval=%dms', result.ready, result.pollingConfig.pollInterval)
+    if (result.ready) return true
+    pollInterval = result.pollingConfig.pollInterval
   }
-  throw new Error('Picker timed out after 5 minutes')
+
+  return false
 }
 
 async function fetchMediaItems(sessionId: string, token: string): Promise<GooglePhoto[]> {
@@ -55,18 +92,30 @@ async function fetchMediaItems(sessionId: string, token: string): Promise<Google
     })
     if (!res.ok) throw new Error('Failed to fetch media items')
     const data = await res.json()
-
     for (const item of data.mediaItems || []) {
+      // Picker API v1 puts baseUrl inside mediaFile; fall back to top-level baseUrl just in case
+      const baseUrl = item.mediaFile?.baseUrl ?? item.baseUrl
       photos.push({
-        id: item.mediaItem.id,
-        baseUrl: item.mediaItem.baseUrl,
-        createTime: item.mediaItem.createTime,
+        id: item.id,
+        baseUrl,
+        createTime: item.createTime,
       })
     }
     pageToken = data.nextPageToken
   } while (pageToken)
 
   return photos.sort((a, b) => a.createTime.localeCompare(b.createTime))
+}
+
+async function deleteSession(sessionId: string, token: string): Promise<void> {
+  try {
+    await fetch(`https://photospicker.googleapis.com/v1/sessions/${sessionId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  } catch {
+    // Best-effort cleanup — don't fail the flow
+  }
 }
 
 async function getProviderToken(): Promise<string> {
@@ -114,6 +163,7 @@ export function useGooglePhotosPicker() {
     // MOBILE POPUP FIX: open popup synchronously in user gesture handler
     // Any await before window.open() causes popup blockers to trigger
     const popup = window.open('about:blank', '_blank', 'width=600,height=700')
+    console.log('[picker] popup opened:', !!popup)
 
     try {
       let token: string
@@ -131,7 +181,7 @@ export function useGooglePhotosPicker() {
         throw err
       }
 
-      let session: { pickerUri: string; sessionId: string }
+      let session: { pickerUri: string; sessionId: string; pollingConfig: PollingConfig }
       try {
         session = await createPickerSession(token)
       } catch (err) {
@@ -157,24 +207,26 @@ export function useGooglePhotosPicker() {
         }
       }
 
-      // Navigate popup to the picker URI (after async work — now it's safe)
+      // Navigate popup to the picker URI
       if (popup && !popup.closed) {
-        popup.location.href = session.pickerUri
+        popup.location.href = session.pickerUri + '/autoclose'
       }
 
-      const abortController = new AbortController()
-      const closeCheck = setInterval(() => {
-        if (popup?.closed) abortController.abort()
-      }, 500)
+      console.log('[picker] polling session:', session.sessionId)
+      const selected = await pollSession(session.sessionId, token, session.pollingConfig)
+      console.log('[picker] poll result:', selected)
 
-      try {
-        await pollSession(session.sessionId, token, abortController.signal)
-      } finally {
-        clearInterval(closeCheck)
-        if (popup && !popup.closed) popup.close()
-      }
+      // Close popup once we have a result (like the MVP did)
+      if (popup && !popup.closed) popup.close()
+
+      if (!selected) return [] // timed out
 
       const photos = await fetchMediaItems(session.sessionId, token)
+      console.log('[picker] fetched', photos.length, 'photos')
+
+      // Clean up the session (best-effort)
+      await deleteSession(session.sessionId, token)
+
       return photos
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'

@@ -4,9 +4,12 @@ const ALLOWED_URL = /^https:\/\/(lh\d\.googleusercontent\.com|photos\.googleapis
 
 export async function POST(req: Request) {
   try {
-    const { url, token } = await req.json()
+    const body = await req.json()
+    console.log('[proxy-image] body:', JSON.stringify(body).slice(0, 200))
+    const { url, token } = body
 
     if (!url || !token) {
+      console.log('[proxy-image] missing fields — url:', !!url, 'token:', !!token)
       return new NextResponse('Missing url or token', { status: 400 })
     }
 
@@ -15,14 +18,12 @@ export async function POST(req: Request) {
       return new NextResponse('Forbidden', { status: 403 })
     }
 
-    // Append =d to force direct download, bypasses Google's CORS restrictions
-    const fetchUrl = url.endsWith('=d') ? url : `${url}=d`
-
-    const res = await fetch(fetchUrl, {
+    const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     })
 
     if (!res.ok) {
+      console.error('[proxy-image] upstream error:', res.status, await res.text().catch(() => ''))
       return new NextResponse('Failed to fetch image', { status: res.status })
     }
 
