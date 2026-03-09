@@ -26,7 +26,7 @@ export async function updateSession(request: NextRequest) {
   // IMPORTANT: Do not add logic between createServerClient and getUser()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const protectedPaths = ['/dashboard', '/project']
+  const protectedPaths = ['/dashboard']
   const isProtected = protectedPaths.some(p => request.nextUrl.pathname.startsWith(p))
 
   if (!user && isProtected) {

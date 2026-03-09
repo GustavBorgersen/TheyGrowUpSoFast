@@ -16,7 +16,7 @@ export default function HomePage() {
         </p>
         <div className="mt-10 flex flex-col sm:flex-row gap-4 items-center">
           <Link
-            href="/guest"
+            href="/create"
             className="rounded-xl bg-blue-600 px-8 py-4 text-base font-semibold text-white hover:bg-blue-500 transition min-h-[44px] flex items-center"
           >
             Try it free →
