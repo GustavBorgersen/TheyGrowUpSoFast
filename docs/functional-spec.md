@@ -48,14 +48,16 @@ Upload photos of a person over time → get a timelapse video where their face s
 1. Sign in with Google at `/login`
 2. Dashboard at `/dashboard` — list of projects, "New project" button
 3. New project: enter name → create row → redirect to `/project/[id]`
-4. Project page starts in "no reference" state — user picks a single reference photo
-5. Reference photo sets the anchor face (descriptor saved to DB) — all future photos align to it
-6. "Add Photos" → Google Photos Picker opens → batch processed against reference descriptor
-7. All matching faces stored (including profiles) — only no-face and identity-mismatch skipped
-8. Profile filter slider controls which photos are included at generate time
-9. "Generate Video (N photos)" → encodes only photos passing the current filter
-10. Add more photos across sessions — reference stays consistent (loaded from DB, never resets)
-11. Adjust filter and re-generate without re-downloading or re-aligning
+4. Project page starts in "no reference" state — user picks a single reference photo from a grid
+5. After picking, Reference step shows the photo as a large preview (with "Change" button to re-pick)
+6. On save: reference photo blob uploaded to storage; descriptor + path saved to DB
+7. On load: reference photo downloaded and shown in the Reference step immediately
+8. "Add Photos" → Google Photos Picker opens → batch processed against reference descriptor
+9. All matching faces stored (including profiles) — only no-face and identity-mismatch skipped
+10. Profile filter slider controls which photos are included at generate time
+11. "Generate Video (N photos)" → encodes only photos passing the current filter
+12. Add more photos across sessions — reference stays consistent (loaded from DB, never resets)
+13. Adjust filter and re-generate without re-downloading or re-aligning
 
 ## UX Rules
 - Touch targets ≥ 44×44px

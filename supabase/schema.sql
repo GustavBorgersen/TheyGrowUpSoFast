@@ -6,7 +6,8 @@ CREATE TABLE projects (
   name TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   settings JSONB DEFAULT '{"maxProfileScore": 0.4}'::jsonb,
-  reference_descriptor FLOAT8[]
+  reference_descriptor FLOAT8[],
+  reference_photo_path TEXT
 );
 
 CREATE TABLE project_photos (

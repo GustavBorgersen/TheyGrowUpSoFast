@@ -36,8 +36,14 @@ Cross-Origin-Embedder-Policy: require-corp
 ## Data Model
 See `supabase/schema.sql` for full DDL + RLS policies.
 
-### Reference Descriptor Flow
-Each project stores a `reference_descriptor` (FLOAT8 array) — the face descriptor from the user's chosen reference photo. This is the "anchor face" that all other photos align against. The reference is set once via an explicit "Pick reference photo" step, then loaded from DB for all subsequent batches. This eliminates the bug where `let reference = null` in `handleAddPhotos()` caused each batch to align to a different first face.
+### Reference Photo Flow
+Each project stores:
+- `reference_descriptor` (FLOAT8 array) — 128-dim face descriptor used for alignment
+- `reference_photo_path` (TEXT) — path to the original reference image in Supabase storage (`references/{userId}/{projectId}/ref.jpg`)
+
+The reference is set once via an explicit "Pick reference photo" step. The original image blob is uploaded to storage on save, and downloaded back when a project is loaded — so the Reference step always shows the stored photo as a large preview. This eliminates:
+1. The bug where `let reference = null` in `handleAddPhotos()` caused each batch to align to a different first face
+2. The UX gap where loading a project left the Reference step empty with no visible anchor
 
 ### Per-Photo Metadata
 Each `project_photo` stores:
@@ -52,13 +58,13 @@ All storage paths and internal references use our own `id` (UUID), never the pro
 ### Storage Layout
 ```
 media/
-  thumbnails/{userId}/{projectId}/{photoId}.jpg   (~10KB, 300px)
-  frames/{userId}/{projectId}/{photoId}.jpg       (~150KB, 1080×1350)
+  references/{userId}/{projectId}/ref.jpg         (~100–300KB, original image)
+  frames/{userId}/{projectId}/{photoId}.jpg        (~150KB, 1080×1350 aligned)
 ```
 
 ### Storage Budget
-- Reference photo: ~150KB aligned frame + ~15KB thumbnail
-- Per photo: ~150KB aligned frame + ~15KB thumbnail ≈ 165KB
+- Reference photo: ~200KB original image
+- Per photo: ~150KB aligned frame ≈ 150KB
 - 60 photos: ~10MB per project → ~100 projects per 1GB
 
 ### Why Pre-Aligned Frames
@@ -152,7 +158,7 @@ Run automatically as `postinstall` script via `scripts/copy-ffmpeg.js`.
 2. Set redirect URL: `https://yourdomain.vercel.app/auth/callback`
 3. Apply `supabase/schema.sql`
 4. Create `media` bucket (private)
-5. Set Storage RLS (see schema.sql comments)
+5. Set Storage RLS (see schema.sql comments — includes `references/` folder INSERT policy)
 
 ### Google Cloud Console
 1. Create project (or use existing)
