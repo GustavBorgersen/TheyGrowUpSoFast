@@ -7,7 +7,7 @@ Upload photos of a person over time → get a timelapse video where their face s
 
 ### Guest Mode (no account required)
 1. Upload photos from your device (drag-drop or file picker, multiple selection)
-2. Photos sorted by file modification date (oldest first) automatically
+2. Photos sorted by EXIF date taken (oldest first) automatically, falling back to file modification date
 3. Thumbnail grid shows uploaded photos — hover to remove individual ones
 4. Add more photos at any time before generating
 5. Click "Generate timelapse" → face detection + alignment runs in-browser → MP4 downloads
@@ -26,7 +26,8 @@ Upload photos of a person over time → get a timelapse video where their face s
 - Photos processed in-browser; aligned frames stored in Supabase
 - Close the browser, come back next week — project is still there, video still generates
 - Add more photos to a project over time
-- Inline project rename, remove individual photos, delete project
+- Remove individual photos from a project and save to persist deletions
+- Inline project rename, delete project
 
 ### Paid (future)
 - Not implemented in V1
@@ -34,7 +35,7 @@ Upload photos of a person over time → get a timelapse video where their face s
 ## User Flows
 
 ### Guest Flow
-1. Land on `/` — hero with CTA "Try it free →" → `/guest`
+1. Land on `/` — hero with CTA "Try it free →" → `/create`
 2. Drag or select photos (multiple accepted, `image/*`)
 3. Thumbnails appear immediately, sorted oldest first
 4. Remove unwanted photos by hovering and clicking X
@@ -46,9 +47,9 @@ Upload photos of a person over time → get a timelapse video where their face s
 
 ### Logged-in Flow
 1. Sign in with Google at `/login`
-2. Dashboard at `/dashboard` — list of projects, "New project" button
-3. New project: enter name → create row → redirect to `/project/[id]`
-4. Project page starts in "no reference" state — user picks a single reference photo from a grid
+2. Unified flow at `/create` — Projects panel at top lists saved projects, "Save" button
+3. Load existing project or start fresh — all on the same page
+4. Pick a single reference photo from uploaded images (or loaded from saved project)
 5. After picking, Reference step shows the photo as a large preview (with "Change" button to re-pick)
 6. On save: reference photo blob uploaded to storage; descriptor + path saved to DB
 7. On load: reference photo downloaded and shown in the Reference step immediately
@@ -69,9 +70,8 @@ Upload photos of a person over time → get a timelapse video where their face s
 - Photos persist after generation so user can add more and regenerate
 
 ## Source Rules (V1)
-- A project is either Google Photos or local files — not both
-- Enforced at the UI level with clear messaging
-- Mixed sources are a future paid feature
+- A project can mix Google Photos and local files
+- Saved project photos (already aligned) are distinguished from new uploads in the UI
 
 ## Copy
 - Hero: "Watch them grow — one photo at a time"

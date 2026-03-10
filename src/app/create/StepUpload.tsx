@@ -19,7 +19,7 @@ export function StepUpload({ photos, dispatch, isLoggedIn }: Props) {
   const [importing, setImporting] = useState(false)
   const { openPicker, isOpen: pickerOpen, error: pickerError } = useGooglePhotosPicker()
 
-  const addFiles = useCallback((incoming: File[]) => {
+  const addFiles = useCallback(async (incoming: File[]) => {
     const imageFiles = incoming.filter(f => f.type.startsWith('image/'))
     if (imageFiles.length === 0) return
 
@@ -28,24 +28,37 @@ export function StepUpload({ photos, dispatch, isLoggedIn }: Props) {
       return p.id
     }))
 
-    const newPhotos: UnifiedPhoto[] = imageFiles
-      .filter(f => !existingKeys.has(`${f.name}-${f.size}`))
-      .map(f => ({
-        id: crypto.randomUUID(),
-        source: { kind: 'local' as const, file: f },
-        thumbnailUrl: URL.createObjectURL(f),
-        originalBlob: f,
-        createTime: f.lastModified,
-        alignedBlob: null,
-        alignedThumbUrl: null,
-        descriptor: null,
-        profileScore: null,
-        skipReason: null,
-      }))
+    const dedupedFiles = imageFiles.filter(f => !existingKeys.has(`${f.name}-${f.size}`))
+    if (dedupedFiles.length === 0) return
 
-    if (newPhotos.length > 0) {
-      dispatch({ type: 'ADD_PHOTOS', photos: newPhotos })
-    }
+    // Extract EXIF DateTimeOriginal for accurate chronological ordering
+    const exifr = (await import('exifr')).default
+    const newPhotos: UnifiedPhoto[] = await Promise.all(
+      dedupedFiles.map(async f => {
+        let createTime = f.lastModified
+        try {
+          const exif = await exifr.parse(f, ['DateTimeOriginal', 'CreateDate'])
+          const exifDate = exif?.DateTimeOriginal ?? exif?.CreateDate
+          if (exifDate instanceof Date && !isNaN(exifDate.getTime())) {
+            createTime = exifDate.getTime()
+          }
+        } catch { /* fall back to lastModified */ }
+        return {
+          id: crypto.randomUUID(),
+          source: { kind: 'local' as const, file: f },
+          thumbnailUrl: URL.createObjectURL(f),
+          originalBlob: f,
+          createTime,
+          alignedBlob: null,
+          alignedThumbUrl: null,
+          descriptor: null,
+          profileScore: null,
+          skipReason: null,
+        }
+      })
+    )
+
+    dispatch({ type: 'ADD_PHOTOS', photos: newPhotos })
   }, [photos, dispatch])
 
   const handleGooglePhotos = useCallback(async () => {

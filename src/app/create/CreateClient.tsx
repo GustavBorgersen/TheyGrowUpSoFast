@@ -60,7 +60,10 @@ export function CreateClient({ user, initialProject }: Props) {
     switch (target) {
       case 'upload': return true
       // Reference step not needed when descriptor already loaded from a saved project
-      case 'reference': return state.photos.filter(p => p.source.kind !== 'saved').length > 0 && !state.referenceDescriptor
+      case 'reference':
+        return state.photos.some(p => p.source.kind !== 'saved')
+          || state.referencePhotoUrl !== null
+          || state.referenceDescriptor !== null
       case 'aligning': return (state.referenceId !== null || state.referenceDescriptor !== null) && faceApiLoaded
       case 'review': return state.photos.some(p => p.alignedBlob)
       case 'generate': return state.photos.some(p => p.alignedBlob && !p.skipReason)
@@ -187,6 +190,7 @@ export function CreateClient({ user, initialProject }: Props) {
                   photos={state.photos}
                   referenceId={state.referenceId}
                   referencePhotoUrl={state.referencePhotoUrl}
+                  referenceDescriptor={state.referenceDescriptor}
                   dispatch={dispatch}
                 />
                 {state.referenceId && (
@@ -220,8 +224,8 @@ export function CreateClient({ user, initialProject }: Props) {
                   dispatch={dispatch}
                   onAddMore={() => dispatch({ type: 'SET_STEP', step: 'upload' })}
                 />
-                {/* Save button for logged-in users */}
-                {isLoggedIn && state.photos.some(p => p.alignedBlob && p.source.kind !== 'saved') && (
+                {/* Save hint for logged-in users */}
+                {isLoggedIn && (state.photos.some(p => p.alignedBlob && p.source.kind !== 'saved') || state.projectId) && (
                   <AuthGate isLoggedIn={isLoggedIn} message="Sign in to save">
                     <p className="text-xs text-zinc-500">Use the Projects panel above to save your work.</p>
                   </AuthGate>

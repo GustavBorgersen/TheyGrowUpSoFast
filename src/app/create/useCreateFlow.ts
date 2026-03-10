@@ -89,7 +89,7 @@ function reducer(state: CreateState, action: Action): CreateState {
         ...state,
         projectId: action.projectId,
         projectName: action.projectName,
-        photos: action.photos,
+        photos: [...action.photos].sort((a, b) => a.createTime - b.createTime),
         referenceDescriptor: action.referenceDescriptor,
         referencePhotoBlob: action.referencePhotoBlob,
         referencePhotoUrl: action.referencePhotoUrl,

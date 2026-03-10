@@ -18,7 +18,9 @@ type Props = {
 }
 
 export function StepReview({ photos, profileThreshold, dispatch, onAddMore }: Props) {
-  const alignedPhotos = photos.filter(p => p.alignedBlob || p.skipReason)
+  const alignedPhotos = photos
+    .filter(p => p.alignedBlob || p.skipReason)
+    .sort((a, b) => a.createTime - b.createTime)
 
   const filteredOutIds = useMemo(() => {
     const ids = new Set<string>()

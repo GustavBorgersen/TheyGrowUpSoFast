@@ -71,17 +71,26 @@ export function ProjectPanel({ userId, projectId, projectName, photos, reference
       let referencePhotoUrl: string | null = null
       if (projectData?.reference_photo_path) {
         try {
-          const { data: refUrls } = await supabase.storage.from('media')
+          const { data: refUrls, error: signedErr } = await supabase.storage.from('media')
             .createSignedUrls([projectData.reference_photo_path], 3600)
-          const refUrl = refUrls?.[0]?.signedUrl
+          if (signedErr) console.warn('[load] createSignedUrls error:', signedErr.message)
+          const refItem = refUrls?.[0]
+          if (refItem?.error) console.warn('[load] signed URL item error:', refItem.error)
+          const refUrl = refItem?.signedUrl
           if (refUrl) {
             const res = await fetch(refUrl)
+            if (!res.ok) throw new Error(`fetch ref photo: ${res.status}`)
             referencePhotoBlob = await res.blob()
             referencePhotoUrl = URL.createObjectURL(referencePhotoBlob)
+          } else {
+            console.warn('[load] no signed URL for reference photo path:', projectData.reference_photo_path)
           }
-        } catch {
+        } catch (err) {
+          console.warn('[load] reference photo load failed:', err)
           // Proceed without reference photo — descriptor still enables alignment
         }
+      } else if (projectData) {
+        console.warn('[load] no reference_photo_path in project record')
       }
 
       if (!dbPhotos || dbPhotos.length === 0) {
@@ -224,9 +233,10 @@ export function ProjectPanel({ userId, projectId, projectName, photos, reference
 
       // Save reference descriptor to the project row
       if (referenceDescriptor) {
-        await supabase.from('projects')
+        const { error: descErr } = await supabase.from('projects')
           .update({ reference_descriptor: Array.from(referenceDescriptor) })
           .eq('id', pid)
+        if (descErr) console.warn('[save] reference_descriptor update failed:', descErr.message)
       }
 
       // Upload reference photo blob
@@ -237,7 +247,30 @@ export function ProjectPanel({ userId, projectId, projectName, photos, reference
             .upload(refPath, referencePhotoBlob, { contentType: 'image/jpeg', upsert: true })
             .then(r => { if (r.error) throw r.error })
         )
-        await supabase.from('projects').update({ reference_photo_path: refPath }).eq('id', pid)
+        const { error: pathErr } = await supabase.from('projects')
+          .update({ reference_photo_path: refPath }).eq('id', pid)
+        if (pathErr) console.warn('[save] reference_photo_path update failed:', pathErr.message)
+        else console.log('[save] reference photo saved to', refPath)
+      } else {
+        console.warn('[save] no referencePhotoBlob to save')
+      }
+
+      // Delete removed photos (saved photos that are no longer in state)
+      if (pid) {
+        const { data: dbPhotos } = await supabase
+          .from('project_photos').select('id, aligned_frame_path').eq('project_id', pid)
+        if (dbPhotos) {
+          const currentIds = new Set(photos.map(p => p.id))
+          const removed = dbPhotos.filter(p => !currentIds.has(p.id))
+          if (removed.length > 0) {
+            const removedIds = removed.map(p => p.id)
+            const removedPaths = removed.map(p => p.aligned_frame_path).filter(Boolean) as string[]
+            if (removedPaths.length > 0) {
+              await supabase.storage.from('media').remove(removedPaths)
+            }
+            await supabase.from('project_photos').delete().in('id', removedIds)
+          }
+        }
       }
 
       // Upload only aligned frames for new (non-saved) photos
@@ -295,8 +328,8 @@ export function ProjectPanel({ userId, projectId, projectName, photos, reference
 
           {loading && <p className="text-sm text-zinc-400">Loading project...</p>}
 
-          {/* Save current work */}
-          {photos.some(p => p.alignedBlob && p.source.kind !== 'saved') && (
+          {/* Save current work — show when there are new aligned photos OR an existing project (to persist removals) */}
+          {(photos.some(p => p.alignedBlob && p.source.kind !== 'saved') || projectId) && (
             <div className="space-y-2">
               {!projectId && showNewForm && (
                 <input

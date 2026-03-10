@@ -31,7 +31,9 @@ export function StepGenerate({ photos, profileThreshold, videoUrl, dispatch, pro
   const [error, setError] = useState<string | null>(null)
 
   const includedPhotos = useMemo(() =>
-    photos.filter(p => p.alignedBlob && !p.skipReason && (p.profileScore == null || p.profileScore <= profileThreshold)),
+    photos
+      .filter(p => p.alignedBlob && !p.skipReason && (p.profileScore == null || p.profileScore <= profileThreshold))
+      .sort((a, b) => a.createTime - b.createTime),
     [photos, profileThreshold]
   )
 

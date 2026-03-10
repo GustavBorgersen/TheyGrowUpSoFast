@@ -7,15 +7,12 @@ type Props = {
   photos: UnifiedPhoto[]
   referenceId: string | null
   referencePhotoUrl: string | null
+  referenceDescriptor: Float32Array | null
   dispatch: CreateDispatch
 }
 
-export function StepReference({ photos, referenceId, referencePhotoUrl, dispatch }: Props) {
-  if (photos.length === 0) {
-    return (
-      <p className="text-sm text-zinc-500">Upload photos first, then come back to pick a reference.</p>
-    )
-  }
+export function StepReference({ photos, referenceId, referencePhotoUrl, referenceDescriptor, dispatch }: Props) {
+  const newPhotos = photos.filter(p => p.source.kind !== 'saved')
 
   if (referencePhotoUrl) {
     return (
@@ -34,13 +31,27 @@ export function StepReference({ photos, referenceId, referencePhotoUrl, dispatch
     )
   }
 
+  if (referenceDescriptor && newPhotos.length === 0) {
+    return (
+      <p className="text-sm text-zinc-400">
+        Reference loaded from saved project. Upload new photos to pick a different reference.
+      </p>
+    )
+  }
+
+  if (newPhotos.length === 0) {
+    return (
+      <p className="text-sm text-zinc-500">Upload photos first, then come back to pick a reference.</p>
+    )
+  }
+
   return (
     <div className="space-y-3">
       <p className="text-sm text-zinc-400">
         Pick the photo with the clearest front-facing view. This sets the anchor face for alignment.
       </p>
       <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 md:grid-cols-6">
-        {photos.map(photo => {
+        {newPhotos.map(photo => {
           const isSelected = photo.id === referenceId
           return (
             <button

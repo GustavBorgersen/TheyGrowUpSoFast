@@ -50,5 +50,8 @@ CREATE POLICY "users_own_project_photos" ON project_photos
 -- INSERT policy for frames:
 -- ((bucket_id = 'media') AND (storage.foldername(name))[1] = 'frames' AND (storage.foldername(name))[2] = auth.uid()::text)
 --
+-- INSERT policy for references:
+-- ((bucket_id = 'media') AND (storage.foldername(name))[1] = 'references' AND (storage.foldername(name))[2] = auth.uid()::text)
+--
 -- SELECT policy (signed URLs handle auth, but add for direct access):
 -- ((bucket_id = 'media') AND (storage.foldername(name))[2] = auth.uid()::text)

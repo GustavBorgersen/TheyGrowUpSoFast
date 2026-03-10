@@ -5,6 +5,7 @@
 - **Auth + DB**: Supabase (Google OAuth, Postgres, RLS)
 - **Storage**: Supabase Storage (`media` bucket, private)
 - **Face detection**: `@vladmandic/face-api` (bundles its own TF — do NOT also import `@tensorflow/tfjs`)
+- **EXIF parsing**: `exifr` (lightweight, dynamically imported for photo date extraction)
 - **Video encoding**: `@ffmpeg/ffmpeg` + `@ffmpeg/core` (WASM, runs in browser)
 - **Deployment**: Vercel (free tier)
 
@@ -41,9 +42,18 @@ Each project stores:
 - `reference_descriptor` (FLOAT8 array) — 128-dim face descriptor used for alignment
 - `reference_photo_path` (TEXT) — path to the original reference image in Supabase storage (`references/{userId}/{projectId}/ref.jpg`)
 
-The reference is set once via an explicit "Pick reference photo" step. The original image blob is uploaded to storage on save, and downloaded back when a project is loaded — so the Reference step always shows the stored photo as a large preview. This eliminates:
-1. The bug where `let reference = null` in `handleAddPhotos()` caused each batch to align to a different first face
-2. The UX gap where loading a project left the Reference step empty with no visible anchor
+The reference is set once via an explicit "Pick reference photo" step. The original image blob is uploaded to storage on save, and downloaded back when a project is loaded — so the Reference step always shows the stored photo as a large preview. The Reference step is always reachable when a project is loaded (even without new uploads), allowing users to view or change their reference.
+
+### Photo Ordering
+Photos are sorted chronologically by EXIF `DateTimeOriginal` (or `CreateDate` fallback). For files without EXIF data (PNGs, screenshots), `File.lastModified` is used as a fallback. Sorting is enforced at multiple points: on upload (`ADD_PHOTOS`), on project load (`LOAD_PROJECT`), and at display time in Review and Generate steps.
+
+### Saving & Deletions
+On save, the system:
+1. Deletes DB records and storage files for photos removed from the project since last load
+2. Uploads new aligned frames and upserts their `project_photos` records
+3. Uploads/updates the reference photo blob and descriptor
+
+The save button is visible whenever there's a loaded project (to persist deletions) or new aligned photos to upload.
 
 ### Per-Photo Metadata
 Each `project_photo` stores:
