@@ -72,6 +72,10 @@ export function StepGenerate({ photos, profileThreshold, videoUrl, dispatch, pro
     ? `${projectName.replace(/\s+/g, '-').toLowerCase()}.mp4`
     : 'timelapse.mp4'
 
+  if (includedPhotos.length === 0 && !encoding && !videoUrl) {
+    return <p className="text-sm text-zinc-500">No photos ready. Align and review photos first.</p>
+  }
+
   return (
     <div className="space-y-4">
       {!videoUrl && !encoding && (

@@ -43,10 +43,10 @@ Upload photos of a person over time → get a timelapse video where their face s
 6. Progress: step label + frame N/M progress bar
 7. Done: video player appears with download button; skipped photos marked on grid
 8. Add more photos → "Regenerate" → video overwrites
-9. CTA: "Save your projects" sign-up prompt
+9. CTA: "Sign in" banner (opens popup — never navigates away from `/create`)
 
 ### Logged-in Flow
-1. Sign in with Google at `/login`
+1. Sign in with Google via popup (from `/create` banner or Google Photos import button) — page state preserved
 2. Unified flow at `/create` — Projects panel at top lists saved projects, "Save" button
 3. Load existing project or start fresh — all on the same page
 4. Pick a single reference photo from uploaded images (or loaded from saved project)
@@ -59,6 +59,7 @@ Upload photos of a person over time → get a timelapse video where their face s
 11. "Generate Video (N photos)" → encodes only photos passing the current filter
 12. Add more photos across sessions — reference stays consistent (loaded from DB, never resets)
 13. Adjust filter and re-generate without re-downloading or re-aligning
+14. If Google token expires mid-download, re-auth popup opens automatically — user retries import
 
 ## UX Rules
 - Touch targets ≥ 44×44px

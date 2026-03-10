@@ -6,6 +6,7 @@ import type { CreateState, CreateStep, UnifiedPhoto, SkipReason } from '@/types'
 type Action =
   | { type: 'ADD_PHOTOS'; photos: UnifiedPhoto[] }
   | { type: 'REMOVE_PHOTO'; id: string }
+  | { type: 'REMOVE_ALIGNED'; id: string }
   | { type: 'SET_REFERENCE'; id: string; blob: Blob; url: string }
   | { type: 'CLEAR_REFERENCE' }
   | { type: 'START_ALIGNMENT' }
@@ -33,7 +34,24 @@ function reducer(state: CreateState, action: Action): CreateState {
     }
     case 'REMOVE_PHOTO': {
       const photo = state.photos.find(p => p.id === action.id)
-      if (photo?.alignedThumbUrl) URL.revokeObjectURL(photo.alignedThumbUrl)
+      if (!photo) return state
+
+      // If photo has aligned data, convert to saved-like instead of deleting
+      if (photo.alignedBlob) {
+        // Revoke the upload thumbnail, keep the aligned one
+        if (photo.thumbnailUrl && photo.thumbnailUrl !== photo.alignedThumbUrl) {
+          URL.revokeObjectURL(photo.thumbnailUrl)
+        }
+        const photos = state.photos.map(p =>
+          p.id === action.id
+            ? { ...p, source: { kind: 'saved' as const, projectPhotoId: p.id, supabasePath: '' }, thumbnailUrl: p.alignedThumbUrl ?? p.thumbnailUrl }
+            : p
+        )
+        return { ...state, photos }
+      }
+
+      // No aligned data — delete entirely
+      if (photo.alignedThumbUrl) URL.revokeObjectURL(photo.alignedThumbUrl)
       const photos = state.photos.filter(p => p.id !== action.id)
       const referenceId = state.referenceId === action.id ? null : state.referenceId
       const referenceDescriptor = referenceId === null ? null : state.referenceDescriptor
@@ -45,6 +63,17 @@ function reducer(state: CreateState, action: Action): CreateState {
         referencePhotoBlob = null
       }
       return { ...state, photos, referenceId, referenceDescriptor, referencePhotoBlob, referencePhotoUrl }
+    }
+    case 'REMOVE_ALIGNED': {
+      const photos = state.photos.map(p =>
+        p.id === action.id
+          ? (() => {
+              if (p.alignedThumbUrl) URL.revokeObjectURL(p.alignedThumbUrl)
+              return { ...p, alignedBlob: null, alignedThumbUrl: null, descriptor: null, profileScore: null, skipReason: null }
+            })()
+          : p
+      )
+      return { ...state, photos }
     }
     case 'SET_REFERENCE':
       if (state.referencePhotoUrl) URL.revokeObjectURL(state.referencePhotoUrl)

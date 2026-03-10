@@ -14,10 +14,9 @@ type Props = {
   photos: UnifiedPhoto[]
   profileThreshold: number
   dispatch: CreateDispatch
-  onAddMore: () => void
 }
 
-export function StepReview({ photos, profileThreshold, dispatch, onAddMore }: Props) {
+export function StepReview({ photos, profileThreshold, dispatch }: Props) {
   const alignedPhotos = photos
     .filter(p => p.alignedBlob || p.skipReason)
     .sort((a, b) => a.createTime - b.createTime)
@@ -105,9 +104,9 @@ export function StepReview({ photos, profileThreshold, dispatch, onAddMore }: Pr
 
               {!photo.skipReason && (
                 <button
-                  onClick={() => dispatch({ type: 'REMOVE_PHOTO', id: photo.id })}
+                  onClick={() => dispatch({ type: 'REMOVE_ALIGNED', id: photo.id })}
                   className="absolute top-1 right-1 hidden h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white group-hover:flex"
-                  aria-label="Remove photo"
+                  aria-label="Remove aligned data"
                 >
                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -119,12 +118,6 @@ export function StepReview({ photos, profileThreshold, dispatch, onAddMore }: Pr
         })}
       </div>
 
-      <button
-        onClick={onAddMore}
-        className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-500 transition min-h-[44px]"
-      >
-        + Add more photos
-      </button>
     </div>
   )
 }

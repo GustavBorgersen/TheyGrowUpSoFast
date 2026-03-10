@@ -13,6 +13,8 @@ type Props = {
   dispatch: CreateDispatch
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   faceApi: any
+  faceApiLoaded: boolean
+  runningRef: React.RefObject<boolean>
 }
 
 function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
@@ -25,24 +27,21 @@ function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   })
 }
 
-export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgress, dispatch, faceApi }: Props) {
+export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgress, dispatch, faceApi, faceApiLoaded, runningRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const runningRef = useRef(false)
 
   const runAlignment = useCallback(async () => {
-    // Need either a selected reference photo OR a pre-loaded descriptor (from saved project)
+    // Gate: only run when START_ALIGNMENT has set alignProgress to non-null
+    if (!alignProgress) return
     if (runningRef.current || !faceApi || (!referenceId && !referenceDescriptor) || !canvasRef.current) return
     runningRef.current = true
 
     const { detectAndAlign } = await import('@/lib/faceAlign')
 
-    // If we already have a descriptor (loaded project), skip reference alignment.
-    // Otherwise, put the reference photo first so we get its descriptor.
     let reference: Float32Array | null = referenceDescriptor ?? null
 
     let toAlign: UnifiedPhoto[]
     if (referenceDescriptor) {
-      // Only align photos that aren't already processed
       toAlign = photos.filter(p => !p.alignedBlob && !p.skipReason)
     } else {
       const refPhoto = photos.find(p => p.id === referenceId)
@@ -76,12 +75,10 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
           continue
         }
 
-        // First photo aligned gives us the reference descriptor
         if (reference === null) {
           reference = result.descriptor
         }
 
-        // Snapshot aligned frame
         const snapshot = document.createElement('canvas')
         snapshot.width = result.canvas.width
         snapshot.height = result.canvas.height
@@ -91,7 +88,6 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
           snapshot.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/jpeg', 0.85)
         )
 
-        // Create thumbnail
         const thumbCanvas = document.createElement('canvas')
         const thumbH = Math.round(snapshot.height * (300 / snapshot.width))
         thumbCanvas.width = 300
@@ -118,26 +114,66 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
 
     dispatch({ type: 'ALIGNMENT_DONE' })
     runningRef.current = false
-  }, [photos, referenceId, referenceDescriptor, dispatch, faceApi])
+  }, [photos, referenceId, referenceDescriptor, alignProgress, dispatch, faceApi, runningRef])
 
-  // Auto-run alignment when step is entered
+  // Run alignment when alignProgress is set (via START_ALIGNMENT)
   useEffect(() => {
     runAlignment()
   }, [runAlignment])
 
+  const hasReference = referenceId !== null || referenceDescriptor !== null
+  const unalignedCount = photos.filter(p => !p.alignedBlob && !p.skipReason && p.source.kind !== 'saved').length
   const current = alignProgress?.current ?? 0
   const total = alignProgress?.total ?? 0
-  const isRunning = total > 0 && current <= total
+  const isRunning = runningRef.current || (total > 0 && current <= total && alignProgress !== null)
 
+  const handleStart = () => {
+    dispatch({ type: 'START_ALIGNMENT' })
+  }
+
+  // Running state
+  if (isRunning) {
+    return (
+      <div className="space-y-4">
+        <ProcessingView
+          status="aligning"
+          current={current}
+          total={total}
+          encodingProgress={0}
+          skipped={[]}
+        />
+        <canvas ref={canvasRef} className="hidden" />
+      </div>
+    )
+  }
+
+  // No reference picked
+  if (!hasReference) {
+    return (
+      <p className="text-sm text-zinc-500">Pick a reference photo first, then come back to align.</p>
+    )
+  }
+
+  // No unaligned photos
+  if (unalignedCount === 0) {
+    return (
+      <p className="text-sm text-zinc-500">All photos are aligned. Upload more to align them.</p>
+    )
+  }
+
+  // Ready to align
   return (
     <div className="space-y-4">
-      <ProcessingView
-        status={isRunning ? 'aligning' : 'idle'}
-        current={current}
-        total={total}
-        encodingProgress={0}
-        skipped={[]}
-      />
+      <p className="text-sm text-zinc-400">
+        {unalignedCount} photo{unalignedCount !== 1 ? 's' : ''} ready to align.
+      </p>
+      <button
+        onClick={handleStart}
+        disabled={!faceApiLoaded}
+        className="w-full rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50 transition min-h-[44px]"
+      >
+        {!faceApiLoaded ? 'Loading face detection...' : `Start alignment (${unalignedCount} photo${unalignedCount !== 1 ? 's' : ''})`}
+      </button>
       <canvas ref={canvasRef} className="hidden" />
     </div>
   )

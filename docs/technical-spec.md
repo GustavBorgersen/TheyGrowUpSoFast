@@ -151,6 +151,16 @@ supabase.auth.signInWithOAuth({
 })
 ```
 
+### Popup Auth (from `/create`)
+Auth is handled via popup window to preserve React state on the `/create` page:
+1. `window.open('/login?next=/auth/popup-close', '_blank', 'popup,width=500,height=700')`
+2. Login page reads `?next=` and passes it through to `/auth/callback?next=...`
+3. After OAuth completes, callback redirects to `/auth/popup-close` which calls `window.close()`
+4. Parent page polls `popup.closed`, then calls `router.refresh()` to re-run the server component
+5. `user` prop updates, `isLoggedIn` flips to `true` — all client state (photos, alignment) survives
+
+Token expiry during Google Photos download: if proxy-image returns 401, re-auth popup opens automatically and user retries import.
+
 ## FFmpeg Public Files Setup
 ```bash
 cp node_modules/@ffmpeg/core/dist/umd/ffmpeg-core.js public/ffmpeg/

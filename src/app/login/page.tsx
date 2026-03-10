@@ -14,11 +14,15 @@ export default function LoginPage() {
 
     const supabase = createClient()
     const origin = window.location.origin
+    const next = new URLSearchParams(window.location.search).get('next')
+    const callbackUrl = next
+      ? `${origin}/auth/callback?next=${encodeURIComponent(next)}`
+      : `${origin}/auth/callback`
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${origin}/auth/callback`,
+        redirectTo: callbackUrl,
         scopes: 'https://www.googleapis.com/auth/photospicker.mediaitems.readonly',
         queryParams: { access_type: 'offline', prompt: 'consent' },
       },
