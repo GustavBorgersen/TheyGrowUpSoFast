@@ -60,15 +60,17 @@ function euclidean(a: Float32Array, b: Float32Array): number {
  */
 export async function detectAndAlign(
   faceApi: FaceApi,
-  img: HTMLImageElement,
+  img: HTMLImageElement | HTMLCanvasElement,
   canvas: HTMLCanvasElement,
   reference: Float32Array | null,
   maxProfileScore: number
 ): Promise<AlignResult> {
   // 1. Downscale input to max DETECT_MAX_W for speed + memory
-  const scale = Math.min(1, DETECT_MAX_W / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height, 1))
-  const dw = Math.round((img.naturalWidth || img.width) * scale)
-  const dh = Math.round((img.naturalHeight || img.height) * scale)
+  const srcW = img instanceof HTMLImageElement ? (img.naturalWidth || img.width) : img.width
+  const srcH = img instanceof HTMLImageElement ? (img.naturalHeight || img.height) : img.height
+  const scale = Math.min(1, DETECT_MAX_W / Math.max(srcW, srcH, 1))
+  const dw = Math.round(srcW * scale)
+  const dh = Math.round(srcH * scale)
 
   const detectCanvas = document.createElement('canvas')
   detectCanvas.width = dw

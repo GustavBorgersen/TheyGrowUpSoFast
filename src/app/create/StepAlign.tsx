@@ -18,14 +18,39 @@ type Props = {
   runningRef: React.RefObject<boolean>
 }
 
-function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(blob)
-    const img = new Image()
-    img.onload = () => { URL.revokeObjectURL(url); resolve(img) }
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to load image')) }
-    img.src = url
-  })
+async function loadImageFromBlob(blob: Blob): Promise<HTMLCanvasElement> {
+  // 1. Read EXIF orientation
+  const exifr = (await import('exifr')).default
+  let orientation = 1
+  try {
+    const exif = await exifr.parse(blob, ['Orientation'])
+    if (exif?.Orientation) orientation = exif.Orientation
+  } catch { /* default to 1 */ }
+
+  // 2. Load raw pixels (no browser EXIF rotation)
+  const bitmap = await createImageBitmap(blob, { imageOrientation: 'none' })
+  const bw = bitmap.width, bh = bitmap.height
+
+  // 3. Create canvas with correct dimensions (swap for 90°/270°)
+  const swapped = orientation >= 5
+  const canvas = document.createElement('canvas')
+  canvas.width = swapped ? bh : bw
+  canvas.height = swapped ? bw : bh
+  const ctx = canvas.getContext('2d')!
+
+  // 4. Apply EXIF transform
+  switch (orientation) {
+    case 2: ctx.setTransform(-1, 0, 0, 1, bw, 0); break
+    case 3: ctx.setTransform(-1, 0, 0, -1, bw, bh); break
+    case 4: ctx.setTransform(1, 0, 0, -1, 0, bh); break
+    case 5: ctx.setTransform(0, 1, 1, 0, 0, 0); break
+    case 6: ctx.setTransform(0, 1, -1, 0, bh, 0); break
+    case 7: ctx.setTransform(0, -1, -1, 0, bh, bw); break
+    case 8: ctx.setTransform(0, -1, 1, 0, 0, bw); break
+  }
+  ctx.drawImage(bitmap, 0, 0)
+  bitmap.close()
+  return canvas
 }
 
 export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgress, dispatch, faceApi, faceApiLoaded, runningRef }: Props) {
@@ -64,7 +89,7 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
 
       if (!canvasRef.current) break
 
-      let img: HTMLImageElement
+      let img: HTMLCanvasElement
       try {
         img = await withTimeout(loadImageFromBlob(photo.originalBlob), 15_000, 'image load')
       } catch (err) {
