@@ -30,6 +30,8 @@ const SKIP_LABELS: Record<SkipReason, string> = {
   no_face: 'No face detected',
   profile_angle: 'Face at profile angle',
   identity_mismatch: 'Different person',
+  timeout: 'Timed out',
+  error: 'Processing error',
 }
 
 export function ProcessingView({ status, current, total, encodingProgress, skipped, error }: Props) {

@@ -39,7 +39,7 @@ export type AlignResult = {
   profileScore: number
 }
 
-export type SkipReason = 'no_face' | 'profile_angle' | 'identity_mismatch'
+export type SkipReason = 'no_face' | 'profile_angle' | 'identity_mismatch' | 'timeout' | 'error'
 
 export type GooglePhoto = {
   id: string

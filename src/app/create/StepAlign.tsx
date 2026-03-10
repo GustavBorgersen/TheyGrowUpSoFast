@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useCallback } from 'react'
-import type { UnifiedPhoto } from '@/types'
+import type { UnifiedPhoto, SkipReason } from '@/types'
 import type { CreateDispatch } from './useCreateFlow'
 import { ProcessingView } from '@/components/ProcessingView'
+import { withTimeout } from '@/lib/withTimeout'
 
 type Props = {
   photos: UnifiedPhoto[]
@@ -29,12 +30,16 @@ function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
 
 export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgress, dispatch, faceApi, faceApiLoaded, runningRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   const runAlignment = useCallback(async () => {
     // Gate: only run when START_ALIGNMENT has set alignProgress to non-null
     if (!alignProgress) return
     if (runningRef.current || !faceApi || (!referenceId && !referenceDescriptor) || !canvasRef.current) return
     runningRef.current = true
+
+    const abort = new AbortController()
+    abortRef.current = abort
 
     const { detectAndAlign } = await import('@/lib/faceAlign')
 
@@ -52,6 +57,8 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
     dispatch({ type: 'ALIGN_PROGRESS', current: 0, total: toAlign.length })
 
     for (let i = 0; i < toAlign.length; i++) {
+      if (abort.signal.aborted) break
+
       const photo = toAlign[i]
       dispatch({ type: 'ALIGN_PROGRESS', current: i + 1, total: toAlign.length })
 
@@ -59,16 +66,20 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
 
       let img: HTMLImageElement
       try {
-        img = await loadImageFromBlob(photo.originalBlob)
-      } catch {
-        dispatch({ type: 'PHOTO_SKIPPED', id: photo.id, reason: 'no_face' })
+        img = await withTimeout(loadImageFromBlob(photo.originalBlob), 15_000, 'image load')
+      } catch (err) {
+        const reason: SkipReason = err instanceof Error && err.message.startsWith('Timeout') ? 'timeout' : 'error'
+        dispatch({ type: 'PHOTO_SKIPPED', id: photo.id, reason })
         continue
       }
 
       try {
         const isRef = !referenceDescriptor && photo.id === referenceId
         const maxProfileScore = isRef ? 0.8 : 999
-        const result = await detectAndAlign(faceApi, img, canvasRef.current, reference, maxProfileScore)
+        const result = await withTimeout(
+          detectAndAlign(faceApi, img, canvasRef.current, reference, maxProfileScore),
+          30_000, 'face detection'
+        )
 
         if (result.skipped) {
           dispatch({ type: 'PHOTO_SKIPPED', id: photo.id, reason: result.reason })
@@ -84,8 +95,11 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
         snapshot.height = result.canvas.height
         snapshot.getContext('2d')!.drawImage(result.canvas, 0, 0)
 
-        const alignedBlob = await new Promise<Blob>((res, rej) =>
-          snapshot.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/jpeg', 0.85)
+        const alignedBlob = await withTimeout(
+          new Promise<Blob>((res, rej) =>
+            snapshot.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/jpeg', 0.85)
+          ),
+          15_000, 'aligned frame export'
         )
 
         const thumbCanvas = document.createElement('canvas')
@@ -93,8 +107,11 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
         thumbCanvas.width = 300
         thumbCanvas.height = thumbH
         thumbCanvas.getContext('2d')!.drawImage(snapshot, 0, 0, 300, thumbH)
-        const thumbBlob = await new Promise<Blob>((res, rej) =>
-          thumbCanvas.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/jpeg', 0.80)
+        const thumbBlob = await withTimeout(
+          new Promise<Blob>((res, rej) =>
+            thumbCanvas.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/jpeg', 0.80)
+          ),
+          15_000, 'thumbnail export'
         )
         const alignedThumbUrl = URL.createObjectURL(thumbBlob)
 
@@ -108,10 +125,12 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
         })
       } catch (err) {
         console.error('[align] error:', err)
-        dispatch({ type: 'PHOTO_SKIPPED', id: photo.id, reason: 'no_face' })
+        const reason: SkipReason = err instanceof Error && err.message.startsWith('Timeout') ? 'timeout' : 'error'
+        dispatch({ type: 'PHOTO_SKIPPED', id: photo.id, reason })
       }
     }
 
+    abortRef.current = null
     dispatch({ type: 'ALIGNMENT_DONE' })
     runningRef.current = false
   }, [photos, referenceId, referenceDescriptor, alignProgress, dispatch, faceApi, runningRef])
@@ -131,6 +150,14 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
     dispatch({ type: 'START_ALIGNMENT' })
   }
 
+  const skippedPhotos = photos
+    .filter(p => p.skipReason)
+    .map(p => ({ name: p.source.kind === 'local' ? p.source.file.name : p.id, reason: p.skipReason! }))
+
+  const handleCancel = () => {
+    abortRef.current?.abort()
+  }
+
   // Running state
   if (isRunning) {
     return (
@@ -140,8 +167,14 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
           current={current}
           total={total}
           encodingProgress={0}
-          skipped={[]}
+          skipped={skippedPhotos}
         />
+        <button
+          onClick={handleCancel}
+          className="w-full rounded-xl border border-zinc-700 py-3 text-sm font-semibold text-zinc-300 hover:bg-zinc-800 transition min-h-[44px]"
+        >
+          Cancel alignment
+        </button>
         <canvas ref={canvasRef} className="hidden" />
       </div>
     )

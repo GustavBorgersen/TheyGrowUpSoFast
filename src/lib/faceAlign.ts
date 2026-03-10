@@ -27,9 +27,11 @@ export type AlignSuccess = {
   profileScore: number
 }
 
+import type { SkipReason } from '@/types'
+
 export type AlignSkipped = {
   skipped: true
-  reason: 'no_face' | 'profile_angle' | 'identity_mismatch'
+  reason: SkipReason
 }
 
 export type AlignResult = AlignSuccess | AlignSkipped
