@@ -88,7 +88,6 @@ export async function detectAndAlign(
   detectCanvas.height = dh
   const detectCtx = detectCanvas.getContext('2d')
   if (!detectCtx) throw new Error('Could not get detect canvas context')
-  detectCtx.imageSmoothingQuality = 'high'
   detectCtx.drawImage(img, 0, 0, dw, dh)
 
   // 2. Detect ALL faces with landmarks + descriptors

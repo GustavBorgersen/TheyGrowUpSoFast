@@ -22,21 +22,22 @@ export function useFaceApi() {
 
     async function load() {
       try {
-        // Import face-api only — it bundles its own TF build.
-        // Do NOT also import @tensorflow/tfjs-backend-webgl; causes duplicate kernel registrations.
+        // Import face-api — it bundles its own TF build.
         const faceApi = await import('@vladmandic/face-api')
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const tf = faceApi.tf as any
-        // Force 32-bit float textures — mobile GPUs default to fp16 which
-        // degrades landmark precision, causing bad alignment transforms
-        tf.env().set('WEBGL_FORCE_F16_TEXTURES', false)
-        await tf.setBackend('webgl')
+
+        // Use WASM backend for deterministic fp32 math across all devices.
+        // WebGL produces different landmarks on mobile vs desktop GPUs.
+        const wasm = await import('@tensorflow/tfjs-backend-wasm')
+        wasm.setWasmPaths('/wasm/')
+
+        await tf.setBackend('wasm')
         await tf.ready()
 
-        const f16 = tf.env().getBool('WEBGL_FORCE_F16_TEXTURES')
         const backend = tf.getBackend()
-        tfBackendInfo = `backend=${backend} f16=${f16}`
+        tfBackendInfo = `backend=${backend}`
 
         // Load models sequentially — reduces peak memory on mobile
         await faceApi.nets.ssdMobilenetv1.loadFromUri('/models')

@@ -18,23 +18,14 @@ type Props = {
   runningRef: React.RefObject<boolean>
 }
 
-async function loadImageFromBlob(blob: Blob): Promise<HTMLCanvasElement> {
+function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   const url = URL.createObjectURL(blob)
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new Image()
-    el.onload = () => resolve(el)
-    el.onerror = () => reject(new Error('Failed to load image'))
+    el.onload = () => { URL.revokeObjectURL(url); resolve(el) }
+    el.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to load image')) }
     el.src = url
   })
-  URL.revokeObjectURL(url)
-
-  const w = img.naturalWidth, h = img.naturalHeight
-  const canvas = document.createElement('canvas')
-  canvas.width = w
-  canvas.height = h
-  const ctx = canvas.getContext('2d')!
-  ctx.drawImage(img, 0, 0)
-  return canvas
 }
 
 export function StepAlign({ photos, referenceDescriptor, alignProgress, dispatch, faceApi, faceApiLoaded, runningRef }: Props) {
@@ -65,7 +56,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, dispatch
 
       if (!canvasRef.current) break
 
-      let img: HTMLCanvasElement
+      let img: HTMLImageElement
       try {
         img = await withTimeout(loadImageFromBlob(photo.originalBlob), 30_000, 'image load')
       } catch (err) {

@@ -35,14 +35,29 @@ export function StepReference({ photos, referenceId, referencePhotoUrl, referenc
         el.src = url
       })
 
+      // Downscale to match faceAlign's DETECT_MAX_W (1600) so descriptors
+      // are computed at the same resolution as alignment detection
+      const DETECT_MAX_W = 1600
+      const srcW = img.naturalWidth || img.width
+      const srcH = img.naturalHeight || img.height
+      const scale = Math.min(1, DETECT_MAX_W / Math.max(srcW, srcH, 1))
+      const dw = Math.round(srcW * scale)
+      const dh = Math.round(srcH * scale)
+
+      const detectCanvas = document.createElement('canvas')
+      detectCanvas.width = dw
+      detectCanvas.height = dh
+      const detectCtx = detectCanvas.getContext('2d')!
+      detectCtx.drawImage(img, 0, 0, dw, dh)
+
+      URL.revokeObjectURL(url)
+
       // Detect all faces, pick highest confidence
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const detections: any[] = await faceApi
-        .detectAllFaces(img)
+        .detectAllFaces(detectCanvas)
         .withFaceLandmarks()
         .withFaceDescriptors()
-
-      URL.revokeObjectURL(url)
 
       if (!detections || detections.length === 0) {
         setDetectError('No face detected in this photo. Pick another.')
