@@ -8,7 +8,6 @@ import { withTimeout } from '@/lib/withTimeout'
 
 type Props = {
   photos: UnifiedPhoto[]
-  referenceId: string | null
   referenceDescriptor: Float32Array | null
   alignProgress: { current: number; total: number } | null
   dispatch: CreateDispatch
@@ -37,7 +36,7 @@ async function loadImageFromBlob(blob: Blob): Promise<HTMLCanvasElement> {
   return canvas
 }
 
-export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgress, dispatch, faceApi, faceApiLoaded, runningRef }: Props) {
+export function StepAlign({ photos, referenceDescriptor, alignProgress, dispatch, faceApi, faceApiLoaded, runningRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const [diagLog, setDiagLog] = useState<string[]>([])
@@ -45,7 +44,7 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
   const runAlignment = useCallback(async () => {
     // Gate: only run when START_ALIGNMENT has set alignProgress to non-null
     if (!alignProgress) return
-    if (runningRef.current || !faceApi || (!referenceId && !referenceDescriptor) || !canvasRef.current) return
+    if (runningRef.current || !faceApi || !referenceDescriptor || !canvasRef.current) return
     runningRef.current = true
 
     const abort = new AbortController()
@@ -53,16 +52,7 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
 
     const { detectAndAlign } = await import('@/lib/faceAlign')
 
-    let reference: Float32Array | null = referenceDescriptor ?? null
-
-    let toAlign: UnifiedPhoto[]
-    if (referenceDescriptor) {
-      toAlign = photos.filter(p => !p.alignedBlob && !p.skipReason)
-    } else {
-      const refPhoto = photos.find(p => p.id === referenceId)
-      if (!refPhoto) { runningRef.current = false; return }
-      toAlign = [refPhoto, ...photos.filter(p => p.id !== referenceId && !p.alignedBlob && !p.skipReason)]
-    }
+    const toAlign = photos.filter(p => !p.alignedBlob && !p.skipReason)
 
     dispatch({ type: 'ALIGN_PROGRESS', current: 0, total: toAlign.length })
 
@@ -84,20 +74,14 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
       }
 
       try {
-        const isRef = !referenceDescriptor && photo.id === referenceId
-        const maxProfileScore = isRef ? 0.8 : 999
         const result = await withTimeout(
-          detectAndAlign(faceApi, img, canvasRef.current, reference, maxProfileScore),
+          detectAndAlign(faceApi, img, canvasRef.current, referenceDescriptor),
           60_000, 'face detection'
         )
 
         if (result.skipped) {
           dispatch({ type: 'PHOTO_SKIPPED', id: photo.id, reason: result.reason })
           continue
-        }
-
-        if (reference === null) {
-          reference = result.descriptor
         }
 
         const snapshot = document.createElement('canvas')
@@ -150,14 +134,14 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
     abortRef.current = null
     dispatch({ type: 'ALIGNMENT_DONE' })
     runningRef.current = false
-  }, [photos, referenceId, referenceDescriptor, alignProgress, dispatch, faceApi, runningRef])
+  }, [photos, referenceDescriptor, alignProgress, dispatch, faceApi, runningRef])
 
   // Run alignment when alignProgress is set (via START_ALIGNMENT)
   useEffect(() => {
     runAlignment()
   }, [runAlignment])
 
-  const hasReference = referenceId !== null || referenceDescriptor !== null
+  const hasReference = referenceDescriptor !== null
   const unalignedCount = photos.filter(p => !p.alignedBlob && !p.skipReason && p.source.kind !== 'saved').length
   const current = alignProgress?.current ?? 0
   const total = alignProgress?.total ?? 0

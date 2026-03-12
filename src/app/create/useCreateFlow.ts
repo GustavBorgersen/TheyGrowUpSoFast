@@ -7,7 +7,7 @@ type Action =
   | { type: 'ADD_PHOTOS'; photos: UnifiedPhoto[] }
   | { type: 'REMOVE_PHOTO'; id: string }
   | { type: 'REMOVE_ALIGNED'; id: string }
-  | { type: 'SET_REFERENCE'; id: string; blob: Blob; url: string }
+  | { type: 'SET_REFERENCE'; id: string; blob: Blob; url: string; descriptor: Float32Array }
   | { type: 'CLEAR_REFERENCE' }
   | { type: 'START_ALIGNMENT' }
   | { type: 'ALIGN_PROGRESS'; current: number; total: number }
@@ -78,7 +78,7 @@ function reducer(state: CreateState, action: Action): CreateState {
     case 'SET_REFERENCE':
       if (state.referencePhotoUrl) URL.revokeObjectURL(state.referencePhotoUrl)
       return { ...state, referenceId: action.id, referencePhotoBlob: action.blob,
-               referencePhotoUrl: action.url, error: null }
+               referencePhotoUrl: action.url, referenceDescriptor: action.descriptor, error: null }
     case 'CLEAR_REFERENCE':
       if (state.referencePhotoUrl) URL.revokeObjectURL(state.referencePhotoUrl)
       return { ...state, referenceId: null, referencePhotoBlob: null,
@@ -93,9 +93,7 @@ function reducer(state: CreateState, action: Action): CreateState {
           ? { ...p, alignedBlob: action.alignedBlob, alignedThumbUrl: action.alignedThumbUrl, descriptor: action.descriptor, profileScore: action.profileScore, skipReason: null }
           : p
       )
-      // If this is the reference photo, store descriptor
-      const referenceDescriptor = action.id === state.referenceId ? action.descriptor : state.referenceDescriptor
-      return { ...state, photos, referenceDescriptor }
+      return { ...state, photos }
     }
     case 'PHOTO_SKIPPED': {
       const photos = state.photos.map(p =>

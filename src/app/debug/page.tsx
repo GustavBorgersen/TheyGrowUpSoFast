@@ -33,13 +33,18 @@ export default function DebugPage() {
     const file = e.target.files?.[0]
     if (!file || !faceApi || !canvasRef.current) return
 
-    setStatus('Aligning...')
+    setStatus('Detecting...')
     const url = URL.createObjectURL(file)
     const img = new Image()
     img.onload = async () => {
       URL.revokeObjectURL(url)
       try {
-        const result = await detectAndAlign(faceApi, img, canvasRef.current!, null, 0.4)
+        // First detect to get a descriptor, then align against it
+        const detection = await faceApi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor()
+        if (!detection) { setStatus('No face detected'); return }
+        const descriptor = new Float32Array(detection.descriptor)
+        setStatus('Aligning...')
+        const result = await detectAndAlign(faceApi, img, canvasRef.current!, descriptor)
         if (result.skipped) {
           setStatus(`Skipped: ${result.reason}`)
         } else {

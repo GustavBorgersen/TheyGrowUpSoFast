@@ -168,13 +168,14 @@ export function CreateClient({ user, initialProject }: Props) {
                 referencePhotoUrl={state.referencePhotoUrl}
                 referenceDescriptor={state.referenceDescriptor}
                 dispatch={dispatch}
+                faceApi={faceApi}
+                faceApiLoaded={faceApiLoaded}
               />
             )}
 
             {key === 'aligning' && (
               <StepAlign
                 photos={state.photos}
-                referenceId={state.referenceId}
                 referenceDescriptor={state.referenceDescriptor}
                 alignProgress={state.alignProgress}
                 dispatch={dispatch}

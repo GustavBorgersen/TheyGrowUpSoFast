@@ -66,15 +66,13 @@ function euclidean(a: Float32Array, b: Float32Array): number {
  * @param faceApi  — the dynamically-imported face-api module
  * @param img      — source image
  * @param canvas   — shared output canvas (1080×1350, passed in from caller)
- * @param reference — descriptor from the first photo; null for the first photo
- * @param maxProfileScore — max allowed profile score (from project settings)
+ * @param reference — descriptor from the reference photo
  */
 export async function detectAndAlign(
   faceApi: FaceApi,
   img: HTMLImageElement | HTMLCanvasElement,
   canvas: HTMLCanvasElement,
-  reference: Float32Array | null,
-  maxProfileScore: number
+  reference: Float32Array,
 ): Promise<AlignResult> {
   // 1. Downscale input to max DETECT_MAX_W for speed + memory
   const srcW = img instanceof HTMLImageElement ? (img.naturalWidth || img.width) : img.width
@@ -91,43 +89,45 @@ export async function detectAndAlign(
   detectCtx.imageSmoothingQuality = 'high'
   detectCtx.drawImage(img, 0, 0, dw, dh)
 
-  // 2. Detect face with landmarks + descriptor
+  // 2. Detect ALL faces with landmarks + descriptors
   // Note: tf.tidy() is synchronous — cannot await inside it. face-api manages its own tensors.
-  const detection = await faceApi
-    .detectSingleFace(detectCanvas)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const detections: any[] = await faceApi
+    .detectAllFaces(detectCanvas)
     .withFaceLandmarks()
-    .withFaceDescriptor()
+    .withFaceDescriptors()
 
-  if (!detection) {
+  if (!detections || detections.length === 0) {
     return { skipped: true, reason: 'no_face' }
   }
 
+  // 3. Find the face closest to the reference descriptor
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const det = detection as any
+  let det: any
+  let bestDist = Infinity
+  for (const d of detections) {
+    const dist = euclidean(reference, new Float32Array(d.descriptor))
+    if (dist < bestDist) {
+      bestDist = dist
+      det = d
+    }
+  }
+  if (bestDist > MATCH_THRESHOLD) {
+    return { skipped: true, reason: 'identity_mismatch' }
+  }
+
   const descriptor = new Float32Array(det.descriptor)
   const positions = det.landmarks.positions
 
-  // 3. Eye centers (landmarks 36–41 = left eye, 42–47 = right eye), nose tip = 30
+  // 4. Eye centers (landmarks 36–41 = left eye, 42–47 = right eye), nose tip = 30
   const leftEye = avg(positions.slice(36, 42))
   const rightEye = avg(positions.slice(42, 48))
   const noseTip = positions[30]
 
-  // 4. Profile score — use scaled coordinates (nose tip and eye centers are all on the detect canvas)
+  // 5. Profile score — use scaled coordinates (nose tip and eye centers are all on the detect canvas)
   const leftDistScaled = Math.abs(noseTip.x - leftEye.x)
   const rightDistScaled = Math.abs(rightEye.x - noseTip.x)
   const profileScore = Math.abs(leftDistScaled - rightDistScaled) / Math.max(leftDistScaled, rightDistScaled, 1)
-
-  if (profileScore > maxProfileScore) {
-    return { skipped: true, reason: 'profile_angle' }
-  }
-
-  // 5. Identity check (skip on first photo — it becomes the reference)
-  if (reference !== null) {
-    const dist = euclidean(descriptor, reference)
-    if (dist > MATCH_THRESHOLD) {
-      return { skipped: true, reason: 'identity_mismatch' }
-    }
-  }
 
   // 6. Compute transform (using original image coordinates — scale back from detect canvas)
   const le = { x: leftEye.x / scale, y: leftEye.y / scale }
