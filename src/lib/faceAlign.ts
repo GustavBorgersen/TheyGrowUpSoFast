@@ -20,11 +20,22 @@ const EYE_Y = 513          // CANVAS_H * 0.38
 const MATCH_THRESHOLD = 0.6
 const DETECT_MAX_W = 800
 
+export type AlignDiag = {
+  srcW: number; srcH: number
+  scale: number; dw: number; dh: number
+  leftEye: { x: number; y: number }
+  rightEye: { x: number; y: number }
+  angleDeg: number
+  currentIPD: number
+  scaleF: number
+}
+
 export type AlignSuccess = {
   skipped: false
   canvas: HTMLCanvasElement
   descriptor: Float32Array
   profileScore: number
+  diag?: AlignDiag
 }
 
 import type { SkipReason } from '@/types'
@@ -77,6 +88,7 @@ export async function detectAndAlign(
   detectCanvas.height = dh
   const detectCtx = detectCanvas.getContext('2d')
   if (!detectCtx) throw new Error('Could not get detect canvas context')
+  detectCtx.imageSmoothingQuality = 'high'
   detectCtx.drawImage(img, 0, 0, dw, dh)
 
   // 2. Detect face with landmarks + descriptor
@@ -144,5 +156,12 @@ export async function detectAndAlign(
   ctx.drawImage(img, 0, 0)
   ctx.restore()
 
-  return { skipped: false, canvas, descriptor, profileScore }
+  const diag: AlignDiag = {
+    srcW, srcH, scale, dw, dh,
+    leftEye: le, rightEye: re,
+    angleDeg: angle * (180 / Math.PI),
+    currentIPD, scaleF,
+  }
+
+  return { skipped: false, canvas, descriptor, profileScore, diag }
 }

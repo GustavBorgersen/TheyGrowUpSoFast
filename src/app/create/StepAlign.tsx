@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import type { UnifiedPhoto, SkipReason } from '@/types'
 import type { CreateDispatch } from './useCreateFlow'
 import { ProcessingView } from '@/components/ProcessingView'
@@ -19,43 +19,28 @@ type Props = {
 }
 
 async function loadImageFromBlob(blob: Blob): Promise<HTMLCanvasElement> {
-  // 1. Read EXIF orientation
-  const exifr = (await import('exifr')).default
-  let orientation = 1
-  try {
-    const exif = await exifr.parse(blob, ['Orientation'])
-    if (exif?.Orientation) orientation = exif.Orientation
-  } catch { /* default to 1 */ }
+  const url = URL.createObjectURL(blob)
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image()
+    el.onload = () => resolve(el)
+    el.onerror = () => reject(new Error('Failed to load image'))
+    el.src = url
+  })
+  URL.revokeObjectURL(url)
 
-  // 2. Load raw pixels (no browser EXIF rotation)
-  const bitmap = await createImageBitmap(blob, { imageOrientation: 'none' })
-  const bw = bitmap.width, bh = bitmap.height
-
-  // 3. Create canvas with correct dimensions (swap for 90°/270°)
-  const swapped = orientation >= 5
+  const w = img.naturalWidth, h = img.naturalHeight
   const canvas = document.createElement('canvas')
-  canvas.width = swapped ? bh : bw
-  canvas.height = swapped ? bw : bh
+  canvas.width = w
+  canvas.height = h
   const ctx = canvas.getContext('2d')!
-
-  // 4. Apply EXIF transform
-  switch (orientation) {
-    case 2: ctx.setTransform(-1, 0, 0, 1, bw, 0); break
-    case 3: ctx.setTransform(-1, 0, 0, -1, bw, bh); break
-    case 4: ctx.setTransform(1, 0, 0, -1, 0, bh); break
-    case 5: ctx.setTransform(0, 1, 1, 0, 0, 0); break
-    case 6: ctx.setTransform(0, 1, -1, 0, bh, 0); break
-    case 7: ctx.setTransform(0, -1, -1, 0, bh, bw); break
-    case 8: ctx.setTransform(0, -1, 1, 0, 0, bw); break
-  }
-  ctx.drawImage(bitmap, 0, 0)
-  bitmap.close()
+  ctx.drawImage(img, 0, 0)
   return canvas
 }
 
 export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgress, dispatch, faceApi, faceApiLoaded, runningRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const [diagLog, setDiagLog] = useState<string[]>([])
 
   const runAlignment = useCallback(async () => {
     // Gate: only run when START_ALIGNMENT has set alignProgress to non-null
@@ -148,6 +133,13 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
           descriptor: result.descriptor,
           profileScore: result.profileScore,
         })
+
+        if (result.diag) {
+          const d = result.diag
+          setDiagLog(prev => [...prev,
+            `#${i+1}: ${d.srcW}x${d.srcH} → ${d.dw}x${d.dh} | angle=${d.angleDeg.toFixed(1)}° IPD=${d.currentIPD.toFixed(0)} scale=${d.scaleF.toFixed(2)} eyes=(${d.leftEye.x.toFixed(0)},${d.leftEye.y.toFixed(0)})-(${d.rightEye.x.toFixed(0)},${d.rightEye.y.toFixed(0)})`
+          ])
+        }
       } catch (err) {
         console.error('[align] error:', err)
         const reason: SkipReason = err instanceof Error && err.message.startsWith('Timeout') ? 'timeout' : 'error'
@@ -183,6 +175,18 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
     abortRef.current?.abort()
   }
 
+  const debugOverlay = diagLog.length > 0 && (
+    <details className="mt-4">
+      <summary className="text-xs text-zinc-500 cursor-pointer">Debug info ({diagLog.length} photos)</summary>
+      <textarea
+        readOnly
+        value={diagLog.join('\n')}
+        className="mt-1 w-full h-40 text-xs font-mono bg-zinc-900 text-zinc-400 border border-zinc-700 rounded p-2 select-all"
+        onFocus={e => e.target.select()}
+      />
+    </details>
+  )
+
   // Running state
   if (isRunning) {
     return (
@@ -208,14 +212,20 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
   // No reference picked
   if (!hasReference) {
     return (
-      <p className="text-sm text-zinc-500">Pick a reference photo first, then come back to align.</p>
+      <div>
+        <p className="text-sm text-zinc-500">Pick a reference photo first, then come back to align.</p>
+        {debugOverlay}
+      </div>
     )
   }
 
   // No unaligned photos
   if (unalignedCount === 0) {
     return (
-      <p className="text-sm text-zinc-500">All photos are aligned. Upload more to align them.</p>
+      <div>
+        <p className="text-sm text-zinc-500">All photos are aligned. Upload more to align them.</p>
+        {debugOverlay}
+      </div>
     )
   }
 
@@ -232,6 +242,7 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
       >
         {!faceApiLoaded ? 'Loading face detection...' : `Start alignment (${unalignedCount} photo${unalignedCount !== 1 ? 's' : ''})`}
       </button>
+      {debugOverlay}
       <canvas ref={canvasRef} className="hidden" />
     </div>
   )
