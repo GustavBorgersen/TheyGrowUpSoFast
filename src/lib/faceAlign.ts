@@ -28,6 +28,8 @@ export type AlignDiag = {
   angleDeg: number
   currentIPD: number
   scaleF: number
+  facesFound: number
+  matchDist: number
 }
 
 export type AlignSuccess = {
@@ -161,6 +163,8 @@ export async function detectAndAlign(
     leftEye: le, rightEye: re,
     angleDeg: angle * (180 / Math.PI),
     currentIPD, scaleF,
+    facesFound: detections.length,
+    matchDist: bestDist,
   }
 
   return { skipped: false, canvas, descriptor, profileScore, diag }

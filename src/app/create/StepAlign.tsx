@@ -5,6 +5,7 @@ import type { UnifiedPhoto, SkipReason } from '@/types'
 import type { CreateDispatch } from './useCreateFlow'
 import { ProcessingView } from '@/components/ProcessingView'
 import { withTimeout } from '@/lib/withTimeout'
+import { tfBackendInfo } from '@/hooks/useFaceApi'
 
 type Props = {
   photos: UnifiedPhoto[]
@@ -70,6 +71,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, dispatch
       } catch (err) {
         const reason: SkipReason = err instanceof Error && err.message.startsWith('Timeout') ? 'timeout' : 'error'
         dispatch({ type: 'PHOTO_SKIPPED', id: photo.id, reason })
+        setDiagLog(prev => [...prev, `#${i+1}: SKIP load (${reason})`])
         continue
       }
 
@@ -81,6 +83,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, dispatch
 
         if (result.skipped) {
           dispatch({ type: 'PHOTO_SKIPPED', id: photo.id, reason: result.reason })
+          setDiagLog(prev => [...prev, `#${i+1}: SKIP detect (${result.reason})`])
           continue
         }
 
@@ -121,7 +124,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, dispatch
         if (result.diag) {
           const d = result.diag
           setDiagLog(prev => [...prev,
-            `#${i+1}: ${d.srcW}x${d.srcH} → ${d.dw}x${d.dh} | angle=${d.angleDeg.toFixed(1)}° IPD=${d.currentIPD.toFixed(0)} scale=${d.scaleF.toFixed(2)} eyes=(${d.leftEye.x.toFixed(0)},${d.leftEye.y.toFixed(0)})-(${d.rightEye.x.toFixed(0)},${d.rightEye.y.toFixed(0)})`
+            `#${i+1}: ${d.srcW}x${d.srcH} → ${d.dw}x${d.dh} | faces=${d.facesFound} dist=${d.matchDist.toFixed(3)} | angle=${d.angleDeg.toFixed(1)}° IPD=${d.currentIPD.toFixed(0)} scale=${d.scaleF.toFixed(2)} eyes=(${d.leftEye.x.toFixed(0)},${d.leftEye.y.toFixed(0)})-(${d.rightEye.x.toFixed(0)},${d.rightEye.y.toFixed(0)})`
           ])
         }
       } catch (err) {
@@ -161,7 +164,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, dispatch
 
   const debugOverlay = diagLog.length > 0 && (
     <details className="mt-4">
-      <summary className="text-xs text-zinc-500 cursor-pointer">Debug info ({diagLog.length} photos)</summary>
+      <summary className="text-xs text-zinc-500 cursor-pointer">Debug info ({diagLog.length} photos) — {tfBackendInfo}</summary>
       <textarea
         readOnly
         value={diagLog.join('\n')}
