@@ -17,6 +17,15 @@ const nextConfig: NextConfig = {
   webpack: (config) => {
     config.experiments = { asyncWebAssembly: true, layers: true }
     config.externals = [...(config.externals as unknown[] || []), { canvas: 'canvas' }]
+    // Use face-api's nobundle build so it shares the npm-installed TF.js instance.
+    // This lets @tensorflow/tfjs-backend-wasm register on the same TF.js that face-api uses.
+    config.resolve = {
+      ...config.resolve,
+      alias: {
+        ...(config.resolve?.alias || {}),
+        '@vladmandic/face-api': '@vladmandic/face-api/dist/face-api.esm-nobundle.js',
+      },
+    }
     return config
   },
 }
