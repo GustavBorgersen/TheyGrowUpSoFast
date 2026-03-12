@@ -18,7 +18,7 @@ const CANVAS_H = 1350
 const EYE_X = 540          // CANVAS_W / 2
 const EYE_Y = 513          // CANVAS_H * 0.38
 const MATCH_THRESHOLD = 0.6
-const DETECT_MAX_W = 800
+const DETECT_MAX_W = 1600
 
 export type AlignDiag = {
   srcW: number; srcH: number

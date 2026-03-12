@@ -76,7 +76,7 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
 
       let img: HTMLCanvasElement
       try {
-        img = await withTimeout(loadImageFromBlob(photo.originalBlob), 15_000, 'image load')
+        img = await withTimeout(loadImageFromBlob(photo.originalBlob), 30_000, 'image load')
       } catch (err) {
         const reason: SkipReason = err instanceof Error && err.message.startsWith('Timeout') ? 'timeout' : 'error'
         dispatch({ type: 'PHOTO_SKIPPED', id: photo.id, reason })
@@ -88,7 +88,7 @@ export function StepAlign({ photos, referenceId, referenceDescriptor, alignProgr
         const maxProfileScore = isRef ? 0.8 : 999
         const result = await withTimeout(
           detectAndAlign(faceApi, img, canvasRef.current, reference, maxProfileScore),
-          30_000, 'face detection'
+          60_000, 'face detection'
         )
 
         if (result.skipped) {

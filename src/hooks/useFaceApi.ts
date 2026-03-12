@@ -27,6 +27,9 @@ export function useFaceApi() {
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const tf = faceApi.tf as any
+        // Force 32-bit float textures — mobile GPUs default to fp16 which
+        // degrades landmark precision, causing bad alignment transforms
+        tf.env().set('WEBGL_FORCE_F16_TEXTURES', false)
         await tf.setBackend('webgl')
         await tf.ready()
 
