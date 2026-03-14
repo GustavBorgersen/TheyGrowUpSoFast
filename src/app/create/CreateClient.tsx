@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useFaceApi } from '@/hooks/useFaceApi'
 import type { CreateStep, UnifiedPhoto } from '@/types'
@@ -13,6 +12,17 @@ import { StepAlign } from './StepAlign'
 import { StepReview } from './StepReview'
 import { StepGenerate } from './StepGenerate'
 import { ProjectPanel } from './ProjectPanel'
+
+function GoogleIcon() {
+  return (
+    <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
+      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+    </svg>
+  )
+}
 
 type Props = {
   user: { id: string; email?: string } | null
@@ -44,6 +54,20 @@ export function CreateClient({ user, initialProject }: Props) {
 
   const isLoggedIn = !!user
   const handleAuthChange = useCallback(() => router.refresh(), [router])
+
+  // Listen for auth completion signalled by /auth/popup-close via localStorage.
+  // This is COOP-safe: the popup reference itself gets severed when navigating
+  // through Google's cross-origin pages, so popup.closed can fire too early.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'auth:popup-complete') {
+        localStorage.removeItem('auth:popup-complete')
+        router.refresh()
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [router])
 
   const [expandedSteps, setExpandedSteps] = useState<Set<CreateStep>>(
     () => new Set(initialProject ? ['review'] : ['upload'])
@@ -92,14 +116,24 @@ export function CreateClient({ user, initialProject }: Props) {
   }, [state])
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-white px-4 py-12">
-      <div className="mx-auto max-w-2xl space-y-4">
-        {/* Header */}
-        <div className="space-y-1">
-          <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">&larr; Back</Link>
-          <h1 className="text-3xl font-bold">Create a timelapse</h1>
+    <main className="min-h-screen bg-zinc-950 text-white">
+      {/* Hero */}
+      <section className="px-4 pt-16 pb-10 text-center">
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
+          Watch them grow — <span className="text-blue-400">one photo at a time</span>
+        </h1>
+        <p className="mx-auto mt-4 max-w-lg text-base text-zinc-400">
+          Upload photos of someone over the years. We align each face and turn them into a
+          smooth timelapse video — all in your browser.
+        </p>
+        <div className="mx-auto mt-8 flex max-w-md justify-center gap-6 text-sm text-zinc-500">
+          <span><span className="font-semibold text-zinc-300">1.</span> Upload</span>
+          <span><span className="font-semibold text-zinc-300">2.</span> Align</span>
+          <span><span className="font-semibold text-zinc-300">3.</span> Download</span>
         </div>
+      </section>
 
+      <div className="mx-auto max-w-2xl space-y-4 px-4 pb-12">
         {/* Project panel for logged-in users */}
         {isLoggedIn && (
           <ProjectPanel
@@ -119,15 +153,12 @@ export function CreateClient({ user, initialProject }: Props) {
             <p className="text-sm text-zinc-400">Sign in to save projects and import from Google Photos</p>
             <button
               onClick={() => {
-                const popup = window.open('/login?next=/auth/popup-close', '_blank', 'popup,width=500,height=700')
-                if (!popup) return
-                const check = setInterval(() => {
-                  if (popup.closed) { clearInterval(check); handleAuthChange() }
-                }, 500)
+                window.open('/login?popup=1', '_blank', 'popup,width=500,height=700')
               }}
-              className="shrink-0 rounded-lg bg-zinc-800 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition"
+              className="shrink-0 flex items-center gap-2 rounded-lg bg-zinc-800 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition"
             >
-              Sign in
+              <GoogleIcon />
+              Sign in with Google
             </button>
           </div>
         )}
@@ -157,7 +188,6 @@ export function CreateClient({ user, initialProject }: Props) {
                 photos={state.photos}
                 dispatch={dispatch}
                 isLoggedIn={isLoggedIn}
-                onAuthChange={handleAuthChange}
               />
             )}
 

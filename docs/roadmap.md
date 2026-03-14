@@ -4,7 +4,7 @@
 
 ### What worked
 - Face alignment algorithm is solid — eyes level and centered across all frames
-- WebGL backend for face-api is fast enough on desktop
+- WASM backend for face-api gives deterministic results across desktop and mobile
 - FFmpeg WASM encoding works reliably in the browser
 - Google Photos Picker flow is smooth on desktop
 - Supabase Auth + Google OAuth works well
@@ -37,6 +37,8 @@ Config, types, DB schema, Supabase auth plumbing, docs.
 Key fix discovered: `tf.tidy()` cannot wrap async detection calls — removed it.
 Key fix discovered: Do not import `@tensorflow/tfjs-backend-webgl` alongside face-api — duplicate kernel registrations.
 Key fix discovered: Turbopack incompatible with face-api dynamic imports — forced `--webpack`.
+Key fix discovered: WebGL produces different face landmarks on mobile vs desktop GPUs — switched to WASM backend.
+Key fix discovered: face-api's bundled ESM build inlines TF.js — must use nobundle build (`face-api.esm-nobundle.js`) via webpack alias so separately-imported backends share the same TF instance.
 
 ### Phase 3 — Landing + Guest Mode ✅
 Landing page, guest flow, ProcessingView, VideoPlayer.
@@ -79,6 +81,9 @@ Vercel env vars, Supabase Google OAuth, storage RLS, Google Cloud Console verifi
 | 2026-03 | Paid mode deferred | Free tier covers MVP; add payments when there's demand |
 | 2026-03 | Force webpack (not Turbopack) | face-api dynamic imports incompatible with Turbopack |
 | 2026-03 | Remove tf.tidy() from async detection | tidy() is synchronous — cannot await inside it |
+| 2026-03 | Switch to WASM backend | WebGL non-deterministic across GPUs — mobile alignment completely broken |
+| 2026-03 | Use face-api nobundle build | Bundled build inlines TF.js; separate WASM import registered on wrong instance |
+| 2026-03 | Reference photo downscaled to match alignment | Descriptor computed at different resolution caused identity mismatches |
 | 2026-03 | Skip indicators on thumbnails | Cleaner than a separate skipped-photos dropdown |
 | 2026-03 | Upload-then-generate UX | Better than processing on drop; lets user review before committing |
 | 2026-03 | Explicit reference photo step | Fixes batch-reset bug: `let reference = null` in each `handleAddPhotos()` call caused alignment drift |

@@ -4,6 +4,8 @@ import { useEffect } from 'react'
 
 export default function PopupClosePage() {
   useEffect(() => {
+    // Signal the opener via localStorage (COOP-safe cross-window communication)
+    try { localStorage.setItem('auth:popup-complete', String(Date.now())) } catch {}
     window.close()
   }, [])
 

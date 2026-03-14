@@ -1,12 +1,23 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginContent />
+    </Suspense>
+  )
+}
+
+function LoginContent() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const searchParams = useSearchParams()
+  const isPopup = searchParams.get('popup') === '1'
 
   async function signIn() {
     setLoading(true)
@@ -14,9 +25,8 @@ export default function LoginPage() {
 
     const supabase = createClient()
     const origin = window.location.origin
-    const next = new URLSearchParams(window.location.search).get('next')
-    const callbackUrl = next
-      ? `${origin}/auth/callback?next=${encodeURIComponent(next)}`
+    const callbackUrl = isPopup
+      ? `${origin}/auth/callback-popup`
       : `${origin}/auth/callback`
 
     const { error } = await supabase.auth.signInWithOAuth({
@@ -33,6 +43,24 @@ export default function LoginPage() {
       setLoading(false)
     }
     // On success, user is redirected by Supabase
+  }
+
+  // Auto-trigger OAuth when opened as a popup — skip the landing UI
+  useEffect(() => {
+    if (isPopup) signIn()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (isPopup) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
+        {error ? (
+          <p className="rounded-lg bg-red-950 px-4 py-3 text-sm text-red-300 text-center">{error}</p>
+        ) : (
+          <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />
+        )}
+      </main>
+    )
   }
 
   return (
@@ -65,7 +93,7 @@ export default function LoginPage() {
 
         <p className="text-center text-xs text-zinc-600">
           No account required to try it.{' '}
-          <Link href="/guest" className="text-zinc-400 hover:text-white underline underline-offset-2">
+          <Link href="/" className="text-zinc-400 hover:text-white underline underline-offset-2">
             Try as guest →
           </Link>
         </p>

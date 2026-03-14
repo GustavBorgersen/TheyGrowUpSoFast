@@ -5,22 +5,17 @@ import type { UnifiedPhoto } from '@/types'
 import type { CreateDispatch } from './useCreateFlow'
 import { useGooglePhotosPicker } from '@/hooks/useGooglePhotosPicker'
 
-function openAuthPopup(onDone: () => void) {
-  const popup = window.open('/login?next=/auth/popup-close', '_blank', 'popup,width=500,height=700')
-  if (!popup) return
-  const check = setInterval(() => {
-    if (popup.closed) { clearInterval(check); onDone() }
-  }, 500)
+function openAuthPopup() {
+  window.open('/login?popup=1', '_blank', 'popup,width=500,height=700')
 }
 
 type Props = {
   photos: UnifiedPhoto[]
   dispatch: CreateDispatch
   isLoggedIn: boolean
-  onAuthChange: () => void
 }
 
-export function StepUpload({ photos, dispatch, isLoggedIn, onAuthChange }: Props) {
+export function StepUpload({ photos, dispatch, isLoggedIn }: Props) {
   const [isDragging, setIsDragging] = useState(false)
   const [importing, setImporting] = useState(false)
   const { openPicker, isOpen: pickerOpen, error: pickerError } = useGooglePhotosPicker()
@@ -77,7 +72,7 @@ export function StepUpload({ photos, dispatch, isLoggedIn, onAuthChange }: Props
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.provider_token
     if (!token) {
-      openAuthPopup(onAuthChange)
+      openAuthPopup()
       return
     }
 
@@ -103,7 +98,7 @@ export function StepUpload({ photos, dispatch, isLoggedIn, onAuthChange }: Props
           })
           if (res.status === 401) {
             // Token expired mid-download — re-auth and let user retry
-            openAuthPopup(onAuthChange)
+            openAuthPopup()
             break
           }
           if (!res.ok) continue
@@ -131,7 +126,7 @@ export function StepUpload({ photos, dispatch, isLoggedIn, onAuthChange }: Props
     } finally {
       setImporting(false)
     }
-  }, [photos, openPicker, dispatch, onAuthChange])
+  }, [photos, openPicker, dispatch])
 
   return (
     <div className="space-y-4">
@@ -175,7 +170,7 @@ export function StepUpload({ photos, dispatch, isLoggedIn, onAuthChange }: Props
         </button>
       ) : (
         <button
-          onClick={() => openAuthPopup(onAuthChange)}
+          onClick={() => openAuthPopup()}
           className="flex w-full items-center justify-center rounded-xl border border-zinc-700 px-5 py-3 text-sm font-medium text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 transition min-h-[44px]"
         >
           Sign in to import from Google Photos

@@ -4,7 +4,7 @@
  * IMPORTANT memory rules:
  * - Caller passes a shared canvas (useRef) — never create canvas inside this fn
  * - Call ctx.clearRect() before each frame
- * - Wrap TF detection in tf.tidy()
+ * - Do NOT wrap TF detection in tf.tidy() — it's synchronous, cannot await
  * - Downscale on a separate small canvas; discard after detection
  */
 

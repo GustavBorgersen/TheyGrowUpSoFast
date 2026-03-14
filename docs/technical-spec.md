@@ -4,7 +4,8 @@
 - **Frontend**: Next.js 16.1.6 (webpack mode), React 19, TypeScript, Tailwind CSS 4
 - **Auth + DB**: Supabase (Google OAuth, Postgres, RLS)
 - **Storage**: Supabase Storage (`media` bucket, private)
-- **Face detection**: `@vladmandic/face-api` (bundles its own TF — do NOT also import `@tensorflow/tfjs`)
+- **Face detection**: `@vladmandic/face-api` (nobundle build, shares TF.js instance with WASM backend)
+- **TF.js backend**: WASM (`@tensorflow/tfjs-backend-wasm`) — deterministic fp32 on all devices (WebGL produces different landmarks on mobile vs desktop GPUs)
 - **EXIF parsing**: `exifr` (lightweight, dynamically imported for photo date extraction)
 - **Video encoding**: `@ffmpeg/ffmpeg` + `@ffmpeg/core` (WASM, runs in browser)
 - **Deployment**: Vercel (free tier)
@@ -29,7 +30,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ## Critical Headers (`next.config.ts`)
 ```
 Cross-Origin-Opener-Policy: same-origin-allow-popups
-Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Embedder-Policy: credentialless
 ```
 - COEP is required for `SharedArrayBuffer` (FFmpeg WASM multi-threading)
 - COOP must be `same-origin-allow-popups` — `same-origin` silently blocks the Google Photos Picker popup
@@ -89,11 +90,11 @@ Constants (tuned, do not make configurable):
   EYE_X = 540             CANVAS_W / 2
   EYE_Y = 513             CANVAS_H * 0.38
   MATCH_THRESHOLD = 0.6   Euclidean descriptor distance
-  DETECT_MAX_W = 800      downscale input before detection
+  DETECT_MAX_W = 1600     downscale input before detection
 
 Per-photo pipeline:
-  1. Downscale to max 800px wide on a temporary canvas
-  2. detectSingleFace().withFaceLandmarks().withFaceDescriptor()
+  1. Downscale to max 1600px wide on a temporary canvas
+  2. detectAllFaces().withFaceLandmarks().withFaceDescriptors()
      Note: do NOT wrap in tf.tidy() — tidy() is synchronous and cannot await
   3. left eye = avg landmarks[36..41], right eye = avg landmarks[42..47], nose = landmarks[30]
   4. Profile score = |leftDist - rightDist| / max(leftDist, rightDist)
@@ -116,8 +117,10 @@ Per-photo pipeline:
 ## `useFaceApi` Hook (`src/hooks/useFaceApi.ts`)
 - Module-level cache: `let faceApiInstance` — loads once per browser session
 - `useEffect` only (module-level import crashes SSR)
-- Import `@vladmandic/face-api` only — it bundles its own TF build
-- Do NOT also import `@tensorflow/tfjs-backend-webgl` — causes duplicate kernel registration warnings
+- Uses face-api's **nobundle** build (`face-api.esm-nobundle.js`) via webpack alias in `next.config.ts`
+- The nobundle build imports `@tensorflow/tfjs`, `@tensorflow/tfjs-backend-webgl`, and `@tensorflow/tfjs-backend-wasm` as external deps (not inlined) — this ensures all backends share one TF.js instance
+- Sets WASM backend: `setWasmPaths('/wasm/')` → `tf.setBackend('wasm')` → `tf.ready()`
+- WASM files served from `public/wasm/` (copied by `scripts/postinstall.js`)
 - Load models sequentially (not parallel — reduces peak memory on mobile)
 
 ## `useVideoGenerator` Hook (`src/hooks/useVideoGenerator.ts`)
@@ -161,12 +164,15 @@ Auth is handled via popup window to preserve React state on the `/create` page:
 
 Token expiry during Google Photos download: if proxy-image returns 401, re-auth popup opens automatically and user retries import.
 
-## FFmpeg Public Files Setup
-```bash
-cp node_modules/@ffmpeg/core/dist/umd/ffmpeg-core.js public/ffmpeg/
-cp node_modules/@ffmpeg/core/dist/umd/ffmpeg-core.wasm public/ffmpeg/
+## Public Files Setup
+Run automatically as `postinstall` script via `scripts/postinstall.js`:
 ```
-Run automatically as `postinstall` script via `scripts/copy-ffmpeg.js`.
+public/ffmpeg/ffmpeg-core.js          ← from @ffmpeg/core
+public/ffmpeg/ffmpeg-core.wasm        ← from @ffmpeg/core
+public/wasm/tfjs-backend-wasm.wasm           ← from @tensorflow/tfjs-backend-wasm
+public/wasm/tfjs-backend-wasm-simd.wasm      ← from @tensorflow/tfjs-backend-wasm
+public/wasm/tfjs-backend-wasm-threaded-simd.wasm  ← from @tensorflow/tfjs-backend-wasm
+```
 
 ## Deployment
 ### Vercel
@@ -196,11 +202,13 @@ Run automatically as `postinstall` script via `scripts/copy-ffmpeg.js`.
 2. **`provider_token` NOT auto-refreshed** — handle 401s gracefully
 3. **Mobile popup blocking** — `window.open()` after any `await` is blocked
 4. **face-api in `useEffect` only** — module-level import crashes SSR
-5. **`@vladmandic/face-api` only** — do not import `@tensorflow/tfjs` or `@tensorflow/tfjs-backend-webgl` alongside it
-6. **`tf.tidy()` is synchronous** — cannot `await` inside it; face-api handles its own tensor cleanup
-7. **Single shared canvas** — new canvas per frame = OOM after ~20 photos on mobile
-8. **FFmpeg WASM in `public/ffmpeg/`** — webpack cannot bundle WASM under COEP
-9. **`-movflags +faststart`** — required for browser video streaming
-10. **Google app verification** — required for >100 users, needs video demo
-11. **`photoslibrary.readonly.appcreateddata` does NOT work for Picker photos** — confirmed March 2025
-12. **Turbopack incompatible** — use `--webpack` flag for both dev and build
+5. **face-api nobundle build** — webpack alias in `next.config.ts` points to `face-api.esm-nobundle.js`. The default bundled build inlines its own TF.js, so separately-imported backends (like WASM) register on a different TF instance and silently don't work
+6. **WASM backend, not WebGL** — WebGL is non-deterministic across GPUs (mobile GPUs use lower precision internally even when claiming fp32). WASM uses IEEE 754 fp32 deterministically
+7. **`tf.tidy()` is synchronous** — cannot `await` inside it; face-api handles its own tensor cleanup
+8. **Single shared canvas** — new canvas per frame = OOM after ~20 photos on mobile
+9. **FFmpeg WASM in `public/ffmpeg/`** — webpack cannot bundle WASM under COEP
+10. **TF.js WASM in `public/wasm/`** — served as static files, path set via `setWasmPaths('/wasm/')`
+11. **`-movflags +faststart`** — required for browser video streaming
+12. **Google app verification** — required for >100 users, needs video demo
+13. **`photoslibrary.readonly.appcreateddata` does NOT work for Picker photos** — confirmed March 2025
+14. **Turbopack incompatible** — use `--webpack` flag for both dev and build
