@@ -54,6 +54,7 @@ export function StepUpload({ photos, dispatch, isLoggedIn }: Props) {
           alignedThumbUrl: null,
           descriptor: null,
           profileScore: null,
+          pitchScore: null,
           skipReason: null,
         }
       })
@@ -113,6 +114,7 @@ export function StepUpload({ photos, dispatch, isLoggedIn }: Props) {
             alignedThumbUrl: null,
             descriptor: null,
             profileScore: null,
+            pitchScore: null,
             skipReason: null,
           })
         } catch {

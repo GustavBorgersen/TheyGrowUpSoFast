@@ -160,6 +160,7 @@ export function ProjectPanel({ userId, projectId, projectName, photos, reference
           alignedThumbUrl,
           descriptor: dbPhoto.descriptor ? new Float32Array(dbPhoto.descriptor) : null,
           profileScore: dbPhoto.profile_score,
+          pitchScore: null,
           skipReason: dbPhoto.skipped ? (dbPhoto.skip_reason as UnifiedPhoto['skipReason']) : null,
         })
       }

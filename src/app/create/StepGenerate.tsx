@@ -10,6 +10,7 @@ import { VideoPlayer } from '@/components/VideoPlayer'
 type Props = {
   photos: UnifiedPhoto[]
   profileThreshold: number
+  pitchThreshold: number
   videoUrl: string | null
   dispatch: CreateDispatch
   projectName: string | null
@@ -25,16 +26,21 @@ function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   })
 }
 
-export function StepGenerate({ photos, profileThreshold, videoUrl, dispatch, projectName }: Props) {
+export function StepGenerate({ photos, profileThreshold, pitchThreshold, videoUrl, dispatch, projectName }: Props) {
   const { generate, encodingProgress } = useVideoGenerator()
   const [encoding, setEncoding] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const includedPhotos = useMemo(() =>
     photos
-      .filter(p => p.alignedBlob && !p.skipReason && (p.profileScore == null || p.profileScore <= profileThreshold))
+      .filter(p =>
+        p.alignedBlob &&
+        !p.skipReason &&
+        (p.profileScore == null || p.profileScore <= profileThreshold) &&
+        (p.pitchScore == null || p.pitchScore <= pitchThreshold)
+      )
       .sort((a, b) => a.createTime - b.createTime),
-    [photos, profileThreshold]
+    [photos, profileThreshold, pitchThreshold]
   )
 
   const handleGenerate = useCallback(async () => {

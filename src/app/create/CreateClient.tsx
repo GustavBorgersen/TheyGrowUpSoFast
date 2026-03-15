@@ -219,6 +219,7 @@ export function CreateClient({ user, initialProject }: Props) {
               <StepReview
                 photos={state.photos}
                 profileThreshold={state.profileThreshold}
+                pitchThreshold={state.pitchThreshold}
                 dispatch={dispatch}
               />
             )}
@@ -227,6 +228,7 @@ export function CreateClient({ user, initialProject }: Props) {
               <StepGenerate
                 photos={state.photos}
                 profileThreshold={state.profileThreshold}
+                pitchThreshold={state.pitchThreshold}
                 videoUrl={state.videoUrl}
                 dispatch={dispatch}
                 projectName={state.projectName}

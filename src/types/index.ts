@@ -64,6 +64,7 @@ export type UnifiedPhoto = {
   alignedThumbUrl: string | null
   descriptor: Float32Array | null
   profileScore: number | null
+  pitchScore: number | null
   skipReason: SkipReason | null
 }
 
@@ -77,6 +78,7 @@ export type CreateState = {
   referencePhotoBlob: Blob | null
   referencePhotoUrl: string | null
   profileThreshold: number
+  pitchThreshold: number
   alignProgress: { current: number; total: number } | null
   videoUrl: string | null
   error: string | null

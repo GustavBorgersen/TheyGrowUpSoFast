@@ -110,6 +110,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, dispatch
           alignedThumbUrl,
           descriptor: result.descriptor,
           profileScore: result.profileScore,
+          pitchScore: result.pitchScore,
         })
 
         if (result.diag) {

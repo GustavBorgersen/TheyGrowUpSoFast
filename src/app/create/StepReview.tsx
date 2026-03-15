@@ -13,10 +13,11 @@ const SKIP_LABELS: Record<string, string> = {
 type Props = {
   photos: UnifiedPhoto[]
   profileThreshold: number
+  pitchThreshold: number
   dispatch: CreateDispatch
 }
 
-export function StepReview({ photos, profileThreshold, dispatch }: Props) {
+export function StepReview({ photos, profileThreshold, pitchThreshold, dispatch }: Props) {
   const alignedPhotos = photos
     .filter(p => p.alignedBlob || p.skipReason)
     .sort((a, b) => a.createTime - b.createTime)
@@ -27,10 +28,12 @@ export function StepReview({ photos, profileThreshold, dispatch }: Props) {
       if (p.skipReason) continue
       if (p.profileScore != null && p.profileScore > profileThreshold) {
         ids.add(p.id)
+      } else if (p.pitchScore != null && p.pitchScore > pitchThreshold) {
+        ids.add(p.id)
       }
     }
     return ids
-  }, [photos, profileThreshold])
+  }, [photos, profileThreshold, pitchThreshold])
 
   const includedCount = photos.filter(p => p.alignedBlob && !p.skipReason && !filteredOutIds.has(p.id)).length
 
@@ -53,6 +56,21 @@ export function StepReview({ photos, profileThreshold, dispatch }: Props) {
           className="flex-1 accent-blue-500"
         />
         <span className="text-sm text-zinc-300 w-12 text-right">{(profileThreshold * 100).toFixed(0)}%</span>
+      </div>
+
+      {/* Pitch filter slider */}
+      <div className="flex items-center gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3">
+        <label className="text-sm text-zinc-400 shrink-0">Pitch filter</label>
+        <input
+          type="range"
+          min={0.05}
+          max={0.5}
+          step={0.05}
+          value={pitchThreshold}
+          onChange={e => dispatch({ type: 'SET_PITCH_THRESHOLD', value: parseFloat(e.target.value) })}
+          className="flex-1 accent-blue-500"
+        />
+        <span className="text-sm text-zinc-300 w-12 text-right">{(pitchThreshold * 100).toFixed(0)}%</span>
       </div>
 
       <p className="text-sm text-zinc-400">
@@ -98,6 +116,14 @@ export function StepReview({ photos, profileThreshold, dispatch }: Props) {
                 <div className="absolute top-1 left-1">
                   <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-zinc-300">
                     {(photo.profileScore * 100).toFixed(0)}%
+                  </span>
+                </div>
+              )}
+
+              {photo.pitchScore != null && !photo.skipReason && (
+                <div className="absolute bottom-1 right-1">
+                  <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-zinc-300">
+                    p{(photo.pitchScore * 100).toFixed(0)}%
                   </span>
                 </div>
               )}

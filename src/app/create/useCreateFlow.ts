@@ -11,10 +11,11 @@ type Action =
   | { type: 'CLEAR_REFERENCE' }
   | { type: 'START_ALIGNMENT' }
   | { type: 'ALIGN_PROGRESS'; current: number; total: number }
-  | { type: 'PHOTO_ALIGNED'; id: string; alignedBlob: Blob; alignedThumbUrl: string; descriptor: Float32Array; profileScore: number }
+  | { type: 'PHOTO_ALIGNED'; id: string; alignedBlob: Blob; alignedThumbUrl: string; descriptor: Float32Array; profileScore: number; pitchScore: number }
   | { type: 'PHOTO_SKIPPED'; id: string; reason: SkipReason }
   | { type: 'ALIGNMENT_DONE' }
   | { type: 'SET_PROFILE_THRESHOLD'; value: number }
+  | { type: 'SET_PITCH_THRESHOLD'; value: number }
   | { type: 'SET_VIDEO_URL'; url: string }
   | { type: 'SET_ERROR'; msg: string | null }
   | { type: 'SET_STEP'; step: CreateStep }
@@ -63,7 +64,7 @@ function reducer(state: CreateState, action: Action): CreateState {
         p.id === action.id
           ? (() => {
               if (p.alignedThumbUrl) URL.revokeObjectURL(p.alignedThumbUrl)
-              return { ...p, alignedBlob: null, alignedThumbUrl: null, descriptor: null, profileScore: null, skipReason: null }
+              return { ...p, alignedBlob: null, alignedThumbUrl: null, descriptor: null, profileScore: null, pitchScore: null, skipReason: null }
             })()
           : p
       )
@@ -84,7 +85,7 @@ function reducer(state: CreateState, action: Action): CreateState {
     case 'PHOTO_ALIGNED': {
       const photos = state.photos.map(p =>
         p.id === action.id
-          ? { ...p, alignedBlob: action.alignedBlob, alignedThumbUrl: action.alignedThumbUrl, descriptor: action.descriptor, profileScore: action.profileScore, skipReason: null }
+          ? { ...p, alignedBlob: action.alignedBlob, alignedThumbUrl: action.alignedThumbUrl, descriptor: action.descriptor, profileScore: action.profileScore, pitchScore: action.pitchScore, skipReason: null }
           : p
       )
       return { ...state, photos }
@@ -99,6 +100,8 @@ function reducer(state: CreateState, action: Action): CreateState {
       return { ...state, step: 'review', alignProgress: null }
     case 'SET_PROFILE_THRESHOLD':
       return { ...state, profileThreshold: action.value }
+    case 'SET_PITCH_THRESHOLD':
+      return { ...state, pitchThreshold: action.value }
     case 'SET_VIDEO_URL':
       return { ...state, videoUrl: action.url, step: 'generate' }
     case 'SET_ERROR':
@@ -136,6 +139,7 @@ function createInitialState(): CreateState {
     referencePhotoBlob: null,
     referencePhotoUrl: null,
     profileThreshold: 0.4,
+    pitchThreshold: 0.3,
     alignProgress: null,
     videoUrl: null,
     error: null,

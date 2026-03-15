@@ -58,10 +58,12 @@ The save button is visible whenever there's a loaded project (to persist deletio
 
 ### Per-Photo Metadata
 Each `project_photo` stores:
-- `profile_score` (FLOAT8) — how much the face is turned (0 = frontal, 1 = full profile)
+- `profile_score` (FLOAT8) — how much the face is turned horizontally (0 = frontal, 1 = full profile)
 - `descriptor` (FLOAT8[]) — the 128-dim face descriptor for future "change reference" feature
 
-Photos are only skipped (not stored) for `no_face` or `identity_mismatch`. Profile filtering happens at generate time via a client-side slider, not at add time.
+`pitchScore` is computed client-side at alignment time and not persisted to the DB. Photos loaded from a saved project have `pitchScore: null` and pass the pitch filter by default.
+
+Photos are only skipped (not stored) for `no_face` or `identity_mismatch`. Profile and pitch filtering both happen at generate time via client-side sliders, not at add time.
 
 ### ID Design
 All storage paths and internal references use our own `id` (UUID), never the provider ID. Google's `source_id` is stored for reference only. This keeps the system source-agnostic.
@@ -96,16 +98,19 @@ Per-photo pipeline:
   1. Downscale to max 1600px wide on a temporary canvas
   2. detectAllFaces().withFaceLandmarks().withFaceDescriptors()
      Note: do NOT wrap in tf.tidy() — tidy() is synchronous and cannot await
-  3. left eye = avg landmarks[36..41], right eye = avg landmarks[42..47], nose = landmarks[30]
+  3. left eye = avg landmarks[36..41], right eye = avg landmarks[42..47], nose = landmarks[30], chin = landmarks[8]
   4. Profile score = |leftDist - rightDist| / max(leftDist, rightDist)
      (all distances measured on the scaled detect canvas)
+     Pitch score = |noseTip.y - expectedNoseY| / faceHeight
+       where faceHeight = chinY - eyeMidY, expectedNoseY = eyeMidY + faceHeight * 0.55
+       (0 = level, increases as head tilts up or down; typical threshold: 0.3)
   5. Identity check (skip on first photo — it becomes the reference)
      Euclidean distance between Float32Arrays — skip if > MATCH_THRESHOLD
   6. angle = atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x)
      scale = TARGET_IPD / hypot(rightEye - leftEye)
      eyeMid = midpoint of eyes (scaled back to original image coordinates)
   7. ctx.translate(EYE_X, EYE_Y) → ctx.rotate(-angle) → ctx.scale(scale) → ctx.translate(-eyeMid)
-  8. Return { canvas, descriptor, profileScore }
+  8. Return { canvas, descriptor, profileScore, pitchScore }
 ```
 
 **Memory rules**:

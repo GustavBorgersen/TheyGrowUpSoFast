@@ -37,6 +37,7 @@ export type AlignSuccess = {
   canvas: HTMLCanvasElement
   descriptor: Float32Array
   profileScore: number
+  pitchScore: number
   diag?: AlignDiag
 }
 
@@ -130,6 +131,13 @@ export async function detectAndAlign(
   const rightDistScaled = Math.abs(rightEye.x - noseTip.x)
   const profileScore = Math.abs(leftDistScaled - rightDistScaled) / Math.max(leftDistScaled, rightDistScaled, 1)
 
+  // 5b. Pitch score — vertical head tilt. chin = positions[8], eyeMidY = avg of eye center Ys
+  const eyeMidY = (leftEye.y + rightEye.y) / 2
+  const chinY = positions[8].y
+  const faceHeight = chinY - eyeMidY
+  const expectedNoseY = eyeMidY + faceHeight * 0.55
+  const pitchScore = Math.abs(noseTip.y - expectedNoseY) / Math.max(faceHeight, 1)
+
   // 6. Compute transform (using original image coordinates — scale back from detect canvas)
   const le = { x: leftEye.x / scale, y: leftEye.y / scale }
   const re = { x: rightEye.x / scale, y: rightEye.y / scale }
@@ -166,5 +174,5 @@ export async function detectAndAlign(
     matchDist: bestDist,
   }
 
-  return { skipped: false, canvas, descriptor, profileScore, diag }
+  return { skipped: false, canvas, descriptor, profileScore, pitchScore, diag }
 }
