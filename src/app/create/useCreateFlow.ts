@@ -53,16 +53,10 @@ function reducer(state: CreateState, action: Action): CreateState {
       // No aligned data — delete entirely
       if (photo.alignedThumbUrl) URL.revokeObjectURL(photo.alignedThumbUrl)
       const photos = state.photos.filter(p => p.id !== action.id)
+      // Keep descriptor/blob/url — reference is still valid for alignment even if
+      // the source photo is no longer in the upload list. Only clear the id link.
       const referenceId = state.referenceId === action.id ? null : state.referenceId
-      const referenceDescriptor = referenceId === null ? null : state.referenceDescriptor
-      let referencePhotoUrl = state.referencePhotoUrl
-      let referencePhotoBlob = state.referencePhotoBlob
-      if (referenceId === null) {
-        if (referencePhotoUrl) URL.revokeObjectURL(referencePhotoUrl)
-        referencePhotoUrl = null
-        referencePhotoBlob = null
-      }
-      return { ...state, photos, referenceId, referenceDescriptor, referencePhotoBlob, referencePhotoUrl }
+      return { ...state, photos, referenceId }
     }
     case 'REMOVE_ALIGNED': {
       const photos = state.photos.map(p =>
