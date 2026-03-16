@@ -74,7 +74,7 @@ export default function DebugPage() {
     }
 
     try {
-      const blob = await generate(frames)
+      const blob = await generate(frames, 1.0)
       const url = URL.createObjectURL(blob)
       setVideoUrl(url)
       setStatus(`Encoded! Size: ${(blob.size / 1024).toFixed(0)}KB`)

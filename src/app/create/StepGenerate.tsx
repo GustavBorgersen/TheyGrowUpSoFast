@@ -30,6 +30,7 @@ export function StepGenerate({ photos, profileThreshold, pitchThreshold, videoUr
   const { generate, encodingProgress } = useVideoGenerator()
   const [encoding, setEncoding] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [frameDuration, setFrameDuration] = useState(1.0)
 
   const includedPhotos = useMemo(() =>
     photos
@@ -60,7 +61,7 @@ export function StepGenerate({ photos, profileThreshold, pitchThreshold, videoUr
         frames.push(c)
       }
 
-      const blob = await generate(frames)
+      const blob = await generate(frames, frameDuration)
       const url = URL.createObjectURL(blob)
       dispatch({ type: 'SET_VIDEO_URL', url })
     } catch (err) {
@@ -72,7 +73,7 @@ export function StepGenerate({ photos, profileThreshold, pitchThreshold, videoUr
     } finally {
       setEncoding(false)
     }
-  }, [includedPhotos, generate, dispatch])
+  }, [includedPhotos, frameDuration, generate, dispatch])
 
   const filename = projectName
     ? `${projectName.replace(/\s+/g, '-').toLowerCase()}.mp4`
@@ -84,6 +85,23 @@ export function StepGenerate({ photos, profileThreshold, pitchThreshold, videoUr
 
   return (
     <div className="space-y-4">
+      {/* Frame duration slider */}
+      {!encoding && (
+        <div className="flex items-center gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3">
+          <label className="text-sm text-zinc-400 shrink-0">Seconds per photo</label>
+          <input
+            type="range"
+            min={0.5}
+            max={5}
+            step={0.5}
+            value={frameDuration}
+            onChange={e => setFrameDuration(parseFloat(e.target.value))}
+            className="flex-1 accent-blue-500"
+          />
+          <span className="text-sm text-zinc-300 w-10 text-right">{frameDuration}s</span>
+        </div>
+      )}
+
       {!videoUrl && !encoding && (
         <button
           onClick={handleGenerate}
