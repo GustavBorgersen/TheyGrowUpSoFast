@@ -11,12 +11,14 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type FaceApi = any
 
-// Tuned constants — do not make configurable
-const TARGET_IPD = 220
-const CANVAS_W = 1080
-const CANVAS_H = 1350
-const EYE_X = 540          // CANVAS_W / 2
-const EYE_Y = 513          // CANVAS_H * 0.38
+import type { AlignSizeKey } from '@/types'
+
+export const ALIGN_SIZE_PRESETS = {
+  small:    { canvasW: 720,  canvasH: 900,  targetIpd: 147 },
+  standard: { canvasW: 1080, canvasH: 1350, targetIpd: 220 },
+  large:    { canvasW: 2160, canvasH: 2700, targetIpd: 440 },
+} as const satisfies Record<AlignSizeKey, { canvasW: number; canvasH: number; targetIpd: number }>
+
 const MATCH_THRESHOLD = 0.6
 const DETECT_MAX_W = 1600
 
@@ -68,15 +70,20 @@ function euclidean(a: Float32Array, b: Float32Array): number {
  *
  * @param faceApi  — the dynamically-imported face-api module
  * @param img      — source image
- * @param canvas   — shared output canvas (1080×1350, passed in from caller)
- * @param reference — descriptor from the reference photo
+ * @param canvas      — shared output canvas (passed in from caller; sized by this function)
+ * @param reference   — descriptor from the reference photo
+ * @param sizeConfig  — output canvas dimensions and target IPD (defaults to standard 1080×1350)
  */
 export async function detectAndAlign(
   faceApi: FaceApi,
   img: HTMLImageElement | HTMLCanvasElement,
   canvas: HTMLCanvasElement,
   reference: Float32Array,
+  sizeConfig: { canvasW: number; canvasH: number; targetIpd: number } = ALIGN_SIZE_PRESETS.standard,
 ): Promise<AlignResult> {
+  const { canvasW, canvasH, targetIpd } = sizeConfig
+  const eyeX = canvasW / 2
+  const eyeY = Math.round(canvasH * 0.38)
   // 1. Downscale input to max DETECT_MAX_W for speed + memory
   const srcW = img instanceof HTMLImageElement ? (img.naturalWidth || img.width) : img.width
   const srcH = img instanceof HTMLImageElement ? (img.naturalHeight || img.height) : img.height
@@ -144,21 +151,21 @@ export async function detectAndAlign(
 
   const angle = Math.atan2(re.y - le.y, re.x - le.x)
   const currentIPD = Math.hypot(re.x - le.x, re.y - le.y)
-  const scaleF = TARGET_IPD / currentIPD
+  const scaleF = targetIpd / currentIPD
   const eyeMid = { x: (le.x + re.x) / 2, y: (le.y + re.y) / 2 }
 
   // 7. Draw onto shared canvas
-  canvas.width = CANVAS_W
-  canvas.height = CANVAS_H
+  canvas.width = canvasW
+  canvas.height = canvasH
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Could not get output canvas context')
 
-  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H)
+  ctx.clearRect(0, 0, canvasW, canvasH)
   ctx.fillStyle = 'black'
-  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
+  ctx.fillRect(0, 0, canvasW, canvasH)
 
   ctx.save()
-  ctx.translate(EYE_X, EYE_Y)
+  ctx.translate(eyeX, eyeY)
   ctx.rotate(-angle)
   ctx.scale(scaleF, scaleF)
   ctx.translate(-eyeMid.x, -eyeMid.y)

@@ -80,27 +80,34 @@ All storage paths and internal references use our own `id` (UUID), never the pro
 ```
 media/
   references/{userId}/{projectId}/ref.jpg         (~100–300KB, original image)
-  frames/{userId}/{projectId}/{photoId}.jpg        (~150KB, 1080×1350 aligned)
+  frames/{userId}/{projectId}/{photoId}.jpg        (~150–600KB, aligned frame at chosen output size)
 ```
 
 ### Storage Budget
 - Reference photo: ~200KB original image
-- Per photo: ~150KB aligned frame ≈ 150KB
-- 60 photos: ~10MB per project → ~100 projects per 1GB
+- Per photo: ~150KB (small/standard) to ~600KB (large) aligned frame
+- 60 photos at standard: ~10MB per project → ~100 projects per 1GB
 
 ### Why Pre-Aligned Frames
 Google Photos Picker `baseUrl` tokens expire in ~1h and cannot be refreshed via the Library API after March 2025 (confirmed via official Google docs). The `photoslibrary.readonly.appcreateddata` scope only covers app-uploaded photos — it does NOT work for Picker-selected user photos. Pre-aligned frames are derived/processed data. At ~150KB each, 60 photos = ~10MB, comfortable on Supabase 1GB free tier.
 
 ## Face Alignment Algorithm (`src/lib/faceAlign.ts`)
+
+### Output size presets (`ALIGN_SIZE_PRESETS`)
+All three presets share the same 4:5 portrait aspect ratio and identical face-positioning proportions (eyeX = canvasW/2, eyeY = canvasH×0.38). Only the overall scale differs.
+
+| Key | Dimensions | TARGET_IPD |
+|-----|-----------|------------|
+| `small` | 720×900 | 147 |
+| `standard` | 1080×1350 | 220 |
+| `large` | 2160×2700 | 440 |
+
+`detectAndAlign` accepts a `sizeConfig` parameter (defaults to `standard`). `StepAlign` looks up the user-selected preset and passes it in. The `/debug` page calls `detectAndAlign` directly and gets standard size by default.
+
 ```
-Constants (tuned, do not make configurable):
-  TARGET_IPD = 220        inter-pupil distance in output pixels
-  CANVAS_W = 1080
-  CANVAS_H = 1350
-  EYE_X = 540             CANVAS_W / 2
-  EYE_Y = 513             CANVAS_H * 0.38
+Module-level constants (not size-dependent):
   MATCH_THRESHOLD = 0.6   Euclidean descriptor distance
-  DETECT_MAX_W = 1600     downscale input before detection
+  DETECT_MAX_W = 1600     downscale input before detection (detection speed only)
 
 Per-photo pipeline:
   1. Downscale to max 1600px wide on a temporary canvas
@@ -115,9 +122,10 @@ Per-photo pipeline:
   5. Identity check (skip on first photo — it becomes the reference)
      Euclidean distance between Float32Arrays — skip if > MATCH_THRESHOLD
   6. angle = atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x)
-     scale = TARGET_IPD / hypot(rightEye - leftEye)
+     scaleF = sizeConfig.targetIpd / hypot(rightEye - leftEye)
      eyeMid = midpoint of eyes (scaled back to original image coordinates)
-  7. ctx.translate(EYE_X, EYE_Y) → ctx.rotate(-angle) → ctx.scale(scale) → ctx.translate(-eyeMid)
+  7. ctx.translate(eyeX, eyeY) → ctx.rotate(-angle) → ctx.scale(scaleF) → ctx.translate(-eyeMid)
+     canvas.width/height set from sizeConfig inside detectAndAlign — caller never pre-sizes the canvas
   8. Return { canvas, descriptor, profileScore, pitchScore }
 ```
 

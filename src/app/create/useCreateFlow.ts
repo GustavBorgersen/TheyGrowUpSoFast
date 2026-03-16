@@ -1,7 +1,7 @@
 'use client'
 
 import { useReducer } from 'react'
-import type { CreateState, CreateStep, UnifiedPhoto, SkipReason } from '@/types'
+import type { CreateState, CreateStep, UnifiedPhoto, SkipReason, AlignSizeKey } from '@/types'
 
 type Action =
   | { type: 'ADD_PHOTOS'; photos: UnifiedPhoto[] }
@@ -17,6 +17,7 @@ type Action =
   | { type: 'ALIGNMENT_DONE' }
   | { type: 'SET_PROFILE_THRESHOLD'; value: number }
   | { type: 'SET_PITCH_THRESHOLD'; value: number }
+  | { type: 'SET_ALIGN_SIZE'; size: AlignSizeKey }
   | { type: 'SET_VIDEO_URL'; url: string }
   | { type: 'SET_ERROR'; msg: string | null }
   | { type: 'SET_STEP'; step: CreateStep }
@@ -111,6 +112,8 @@ function reducer(state: CreateState, action: Action): CreateState {
       return { ...state, profileThreshold: action.value }
     case 'SET_PITCH_THRESHOLD':
       return { ...state, pitchThreshold: action.value }
+    case 'SET_ALIGN_SIZE':
+      return { ...state, alignSize: action.size }
     case 'SET_VIDEO_URL':
       return { ...state, videoUrl: action.url, step: 'generate' }
     case 'SET_ERROR':
@@ -149,6 +152,7 @@ function createInitialState(): CreateState {
     referencePhotoUrl: null,
     profileThreshold: 0.4,
     pitchThreshold: 0.3,
+    alignSize: 'standard',
     alignProgress: null,
     videoUrl: null,
     error: null,

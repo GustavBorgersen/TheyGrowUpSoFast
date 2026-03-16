@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useCallback, useState } from 'react'
-import type { UnifiedPhoto, SkipReason } from '@/types'
+import type { UnifiedPhoto, SkipReason, AlignSizeKey } from '@/types'
 import type { CreateDispatch } from './useCreateFlow'
+import { ALIGN_SIZE_PRESETS } from '@/lib/faceAlign'
 import { ProcessingView } from '@/components/ProcessingView'
 import { withTimeout } from '@/lib/withTimeout'
 import { tfBackendInfo } from '@/hooks/useFaceApi'
@@ -11,6 +12,7 @@ type Props = {
   photos: UnifiedPhoto[]
   referenceDescriptor: Float32Array | null
   alignProgress: { current: number; total: number } | null
+  alignSize: AlignSizeKey
   dispatch: CreateDispatch
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   faceApi: any
@@ -28,7 +30,7 @@ function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   })
 }
 
-export function StepAlign({ photos, referenceDescriptor, alignProgress, dispatch, faceApi, faceApiLoaded, runningRef }: Props) {
+export function StepAlign({ photos, referenceDescriptor, alignProgress, alignSize, dispatch, faceApi, faceApiLoaded, runningRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const [diagLog, setDiagLog] = useState<string[]>([])
@@ -43,6 +45,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, dispatch
     abortRef.current = abort
 
     const { detectAndAlign } = await import('@/lib/faceAlign')
+    const sizeConfig = ALIGN_SIZE_PRESETS[alignSize]
 
     const toAlign = photos.filter(p => !p.alignedBlob && !p.skipReason)
 
@@ -68,7 +71,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, dispatch
 
       try {
         const result = await withTimeout(
-          detectAndAlign(faceApi, img, canvasRef.current, referenceDescriptor),
+          detectAndAlign(faceApi, img, canvasRef.current, referenceDescriptor, sizeConfig),
           60_000, 'face detection'
         )
 
@@ -129,7 +132,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, dispatch
     abortRef.current = null
     dispatch({ type: 'ALIGNMENT_DONE' })
     runningRef.current = false
-  }, [photos, referenceDescriptor, alignProgress, dispatch, faceApi, runningRef])
+  }, [photos, referenceDescriptor, alignProgress, alignSize, dispatch, faceApi, runningRef])
 
   // Run alignment when alignProgress is set (via START_ALIGNMENT)
   useEffect(() => {
@@ -208,12 +211,44 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, dispatch
     )
   }
 
+  const sizeOptions: { key: AlignSizeKey; label: string; dims: string }[] = [
+    { key: 'small',    label: 'Small',    dims: '720×900' },
+    { key: 'standard', label: 'Standard', dims: '1080×1350' },
+    { key: 'large',    label: 'Large',    dims: '2160×2700' },
+  ]
+
   // Ready to align
   return (
     <div className="space-y-4">
       <p className="text-sm text-zinc-400">
         {unalignedCount} photo{unalignedCount !== 1 ? 's' : ''} ready to align.
       </p>
+
+      {/* Output size selector */}
+      <div className="space-y-2">
+        <p className="text-xs text-zinc-500">Output size</p>
+        <div className="flex gap-2">
+          {sizeOptions.map(({ key, label, dims }) => (
+            <button
+              key={key}
+              onClick={() => dispatch({ type: 'SET_ALIGN_SIZE', size: key })}
+              disabled={isRunning || !faceApiLoaded}
+              className={`flex-1 rounded-lg border py-2 text-sm font-medium transition disabled:opacity-50 ${
+                alignSize === key
+                  ? 'border-blue-500 bg-blue-600 text-white'
+                  : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+              }`}
+            >
+              <span className="block">{label}</span>
+              <span className="block text-xs opacity-70">{dims}</span>
+            </button>
+          ))}
+        </div>
+        {alignSize === 'large' && (
+          <p className="text-xs text-zinc-500">Larger files, slower encoding</p>
+        )}
+      </div>
+
       <button
         onClick={handleStart}
         disabled={!faceApiLoaded}

@@ -15,6 +15,13 @@ Upload photos of a person over time → get a timelapse video where their face s
 7. Add more photos and regenerate at any time (video overwrites)
 8. Nothing stored server-side
 
+**Output size selector**: before starting alignment, users can choose between three output sizes (all 4:5 portrait ratio):
+- Small · 720×900
+- Standard · 1080×1350 *(default)*
+- Large · 2160×2700 — note shown: "Larger files, slower encoding"
+
+Selector is disabled once alignment is running.
+
 **First-photo rule** (shown prominently): *"The oldest photo sets the reference face. Make sure it has one face clearly visible and looking at the camera."*
 
 **Skip indicators on thumbnails**: skipped photos show faded opacity + label (`No face`, `Wrong person`). Profile- or pitch-filtered photos show amber "Filtered" badge. Profile score shown as top-left percentage overlay; pitch score shown as bottom-right `p{N}%` overlay on all aligned thumbnails.

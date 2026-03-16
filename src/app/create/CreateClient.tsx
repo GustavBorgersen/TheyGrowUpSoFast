@@ -208,6 +208,7 @@ export function CreateClient({ user, initialProject }: Props) {
                 photos={state.photos}
                 referenceDescriptor={state.referenceDescriptor}
                 alignProgress={state.alignProgress}
+                alignSize={state.alignSize}
                 dispatch={dispatch}
                 faceApi={faceApi}
                 faceApiLoaded={faceApiLoaded}

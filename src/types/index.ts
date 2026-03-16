@@ -71,6 +71,8 @@ export type UnifiedPhoto = {
 
 export type CreateStep = 'upload' | 'reference' | 'aligning' | 'review' | 'generate'
 
+export type AlignSizeKey = 'small' | 'standard' | 'large'
+
 export type CreateState = {
   step: CreateStep
   photos: UnifiedPhoto[]
@@ -80,6 +82,7 @@ export type CreateState = {
   referencePhotoUrl: string | null
   profileThreshold: number
   pitchThreshold: number
+  alignSize: AlignSizeKey
   alignProgress: { current: number; total: number } | null
   videoUrl: string | null
   error: string | null
