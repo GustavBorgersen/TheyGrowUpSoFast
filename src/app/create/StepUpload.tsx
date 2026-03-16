@@ -56,6 +56,7 @@ export function StepUpload({ photos, dispatch, isLoggedIn }: Props) {
           profileScore: null,
           pitchScore: null,
           skipReason: null,
+          userOverride: null,
         }
       })
     )
@@ -116,6 +117,7 @@ export function StepUpload({ photos, dispatch, isLoggedIn }: Props) {
             profileScore: null,
             pitchScore: null,
             skipReason: null,
+            userOverride: null,
           })
         } catch {
           // skip failed downloads

@@ -7,6 +7,7 @@ type Action =
   | { type: 'ADD_PHOTOS'; photos: UnifiedPhoto[] }
   | { type: 'REMOVE_PHOTO'; id: string }
   | { type: 'REMOVE_ALIGNED'; id: string }
+  | { type: 'TOGGLE_PHOTO'; id: string; include: boolean }
   | { type: 'SET_REFERENCE'; id: string; blob: Blob; url: string; descriptor: Float32Array }
   | { type: 'CLEAR_REFERENCE' }
   | { type: 'START_ALIGNMENT' }
@@ -64,8 +65,16 @@ function reducer(state: CreateState, action: Action): CreateState {
         p.id === action.id
           ? (() => {
               if (p.alignedThumbUrl) URL.revokeObjectURL(p.alignedThumbUrl)
-              return { ...p, alignedBlob: null, alignedThumbUrl: null, descriptor: null, profileScore: null, pitchScore: null, skipReason: null }
+              return { ...p, alignedBlob: null, alignedThumbUrl: null, descriptor: null, profileScore: null, pitchScore: null, skipReason: null, userOverride: null }
             })()
+          : p
+      )
+      return { ...state, photos }
+    }
+    case 'TOGGLE_PHOTO': {
+      const photos = state.photos.map(p =>
+        p.id === action.id
+          ? { ...p, userOverride: action.include ? 'include' as const : 'exclude' as const }
           : p
       )
       return { ...state, photos }

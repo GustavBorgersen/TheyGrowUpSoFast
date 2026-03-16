@@ -12,6 +12,7 @@ type Props = {
   current: number
   total: number
   encodingProgress: number
+  encodingFrame?: { current: number; total: number } | null
   skipped: SkippedPhoto[]
   error?: string | null
 }
@@ -34,7 +35,7 @@ const SKIP_LABELS: Record<SkipReason, string> = {
   error: 'Processing error',
 }
 
-export function ProcessingView({ status, current, total, encodingProgress, skipped, error }: Props) {
+export function ProcessingView({ status, current, total, encodingProgress, encodingFrame, skipped, error }: Props) {
   const isProcessing = status !== 'idle' && status !== 'done' && status !== 'error'
   const showFrameProgress = (status === 'detecting' || status === 'aligning') && total > 0
   const showEncodingProgress = status === 'encoding'
@@ -71,7 +72,7 @@ export function ProcessingView({ status, current, total, encodingProgress, skipp
       {showEncodingProgress && (
         <div className="space-y-1">
           <div className="flex justify-between text-xs text-zinc-400">
-            <span>Encoding video…</span>
+            <span>{encodingFrame ? `Encoding frame ${encodingFrame.current} of ${encodingFrame.total}…` : 'Encoding video…'}</span>
             <span>{encodingProgress}%</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-zinc-800">

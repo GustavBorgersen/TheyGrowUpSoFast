@@ -66,6 +66,7 @@ export type UnifiedPhoto = {
   profileScore: number | null
   pitchScore: number | null
   skipReason: SkipReason | null
+  userOverride: 'include' | 'exclude' | null
 }
 
 export type CreateStep = 'upload' | 'reference' | 'aligning' | 'review' | 'generate'

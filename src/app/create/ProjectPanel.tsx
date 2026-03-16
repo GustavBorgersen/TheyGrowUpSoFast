@@ -162,6 +162,7 @@ export function ProjectPanel({ userId, projectId, projectName, photos, reference
           profileScore: dbPhoto.profile_score,
           pitchScore: null,
           skipReason: dbPhoto.skipped ? (dbPhoto.skip_reason as UnifiedPhoto['skipReason']) : null,
+          userOverride: null,
         })
       }
 

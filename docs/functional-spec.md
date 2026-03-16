@@ -19,6 +19,8 @@ Upload photos of a person over time → get a timelapse video where their face s
 
 **Skip indicators on thumbnails**: skipped photos show faded opacity + label (`No face`, `Wrong person`). Profile- or pitch-filtered photos show amber "Filtered" badge. Profile score shown as top-left percentage overlay; pitch score shown as bottom-right `p{N}%` overlay on all aligned thumbnails.
 
+**Click-to-toggle**: clicking any aligned photo in the Review grid toggles it in or out of the video. Filtered photos can be force-included this way; included photos can be manually excluded (shown dimmed with an "Off" badge). The X button (remove aligned data) is a separate action accessible on hover.
+
 ### Free Account (Google sign-in)
 - Sign in with Google
 - Create named projects

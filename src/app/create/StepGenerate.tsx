@@ -27,19 +27,20 @@ function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
 }
 
 export function StepGenerate({ photos, profileThreshold, pitchThreshold, videoUrl, dispatch, projectName }: Props) {
-  const { generate, encodingProgress } = useVideoGenerator()
+  const { generate, encodingProgress, encodingFrame } = useVideoGenerator()
   const [encoding, setEncoding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [frameDuration, setFrameDuration] = useState(1.0)
 
   const includedPhotos = useMemo(() =>
     photos
-      .filter(p =>
-        p.alignedBlob &&
-        !p.skipReason &&
-        (p.profileScore == null || p.profileScore <= profileThreshold) &&
-        (p.pitchScore == null || p.pitchScore <= pitchThreshold)
-      )
+      .filter(p => {
+        if (!p.alignedBlob || p.skipReason) return false
+        if (p.userOverride === 'include') return true
+        if (p.userOverride === 'exclude') return false
+        return (p.profileScore == null || p.profileScore <= profileThreshold) &&
+               (p.pitchScore == null || p.pitchScore <= pitchThreshold)
+      })
       .sort((a, b) => a.createTime - b.createTime),
     [photos, profileThreshold, pitchThreshold]
   )
@@ -118,6 +119,7 @@ export function StepGenerate({ photos, profileThreshold, pitchThreshold, videoUr
           current={0}
           total={0}
           encodingProgress={encodingProgress}
+          encodingFrame={encodingFrame}
           skipped={[]}
         />
       )}

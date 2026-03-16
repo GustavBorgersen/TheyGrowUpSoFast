@@ -35,7 +35,14 @@ export function StepReview({ photos, profileThreshold, pitchThreshold, dispatch 
     return ids
   }, [photos, profileThreshold, pitchThreshold])
 
-  const includedCount = photos.filter(p => p.alignedBlob && !p.skipReason && !filteredOutIds.has(p.id)).length
+  function isEffectivelyIncluded(p: (typeof photos)[0]): boolean {
+    if (!p.alignedBlob || p.skipReason) return false
+    if (p.userOverride === 'include') return true
+    if (p.userOverride === 'exclude') return false
+    return !filteredOutIds.has(p.id)
+  }
+
+  const includedCount = alignedPhotos.filter(p => isEffectivelyIncluded(p)).length
 
   if (alignedPhotos.length === 0) {
     return <p className="text-sm text-zinc-500">No aligned photos to review.</p>
@@ -80,17 +87,23 @@ export function StepReview({ photos, profileThreshold, pitchThreshold, dispatch 
       {/* Grid of aligned thumbnails */}
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
         {alignedPhotos.map(photo => {
-          const isFiltered = filteredOutIds.has(photo.id)
-          const dimmed = !!photo.skipReason || isFiltered
+          const included = isEffectivelyIncluded(photo)
+          const isFilteredOut = filteredOutIds.has(photo.id)
+          const dimmed = !included
+          const clickable = !photo.skipReason && !!photo.alignedBlob
 
           return (
-            <div key={photo.id} className="relative group aspect-[4/5] overflow-hidden rounded-lg bg-zinc-900">
+            <div
+              key={photo.id}
+              onClick={clickable ? () => dispatch({ type: 'TOGGLE_PHOTO', id: photo.id, include: !included }) : undefined}
+              className={`relative group aspect-[4/5] overflow-hidden rounded-lg bg-zinc-900 ${clickable ? 'cursor-pointer' : ''}`}
+            >
               {photo.alignedThumbUrl ? (
                 <img
                   src={photo.alignedThumbUrl}
                   alt=""
                   loading="lazy"
-                  className={`h-full w-full object-cover ${dimmed ? 'opacity-40' : ''}`}
+                  className={`h-full w-full object-cover transition-opacity ${dimmed ? 'opacity-40' : ''}`}
                 />
               ) : (
                 <div className={`h-full w-full bg-zinc-800 ${dimmed ? 'opacity-40' : ''}`} />
@@ -104,10 +117,18 @@ export function StepReview({ photos, profileThreshold, pitchThreshold, dispatch 
                 </div>
               )}
 
-              {isFiltered && !photo.skipReason && (
+              {isFilteredOut && photo.userOverride !== 'include' && !photo.skipReason && (
                 <div className="absolute inset-0 flex items-end justify-center bg-black/40 p-1">
                   <span className="rounded bg-amber-900/80 px-1.5 py-0.5 text-[10px] text-amber-300">
                     Filtered
+                  </span>
+                </div>
+              )}
+
+              {photo.userOverride === 'exclude' && (
+                <div className="absolute inset-0 flex items-end justify-center bg-black/40 p-1">
+                  <span className="rounded bg-zinc-700/80 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                    Off
                   </span>
                 </div>
               )}
@@ -130,7 +151,7 @@ export function StepReview({ photos, profileThreshold, pitchThreshold, dispatch 
 
               {!photo.skipReason && (
                 <button
-                  onClick={() => dispatch({ type: 'REMOVE_ALIGNED', id: photo.id })}
+                  onClick={e => { e.stopPropagation(); dispatch({ type: 'REMOVE_ALIGNED', id: photo.id }) }}
                   className="absolute top-1 right-1 hidden h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white group-hover:flex"
                   aria-label="Remove aligned data"
                 >

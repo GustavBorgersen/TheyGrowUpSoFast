@@ -65,6 +65,14 @@ Each `project_photo` stores:
 
 Photos are only skipped (not stored) for `no_face` or `identity_mismatch`. Profile and pitch filtering both happen at generate time via client-side sliders, not at add time.
 
+### Manual Photo Toggle (`userOverride`)
+`UnifiedPhoto` carries a `userOverride: 'include' | 'exclude' | null` field (client-side only, not persisted):
+- `null` — follow filter slider logic (default)
+- `'include'` — force-include even if score exceeds threshold
+- `'exclude'` — force-exclude regardless of score
+
+Set via `TOGGLE_PHOTO` dispatch. Clicking a photo card in StepReview computes the current effective included state and flips it. Resetting to auto (`null`) is not exposed in the UI — clicking just alternates between the two explicit states.
+
 ### ID Design
 All storage paths and internal references use our own `id` (UUID), never the provider ID. Google's `source_id` is stored for reference only. This keeps the system source-agnostic.
 
@@ -133,6 +141,7 @@ Per-photo pipeline:
 - `-movflags +faststart` is critical — moves moov atom to front for browser streaming
 - Frames encoded as `frame_%04d.jpg`, cleaned up after encoding
 - `ffmpeg.readFile()` returns `FileData` — cast via `as any` before passing to `new Blob()`
+- Progress: frame-write phase drives 0–75%; encoding phase drives 75–100% via `log` callback parsing `frame=N` from FFmpeg stderr (the `progress` event is unreliable for image sequences). `encodingFrame` state exposed for "Encoding frame N of M…" label.
 
 ## `useGooglePhotosPicker` Hook (`src/hooks/useGooglePhotosPicker.ts`)
 - Token: `(await supabase.auth.getSession()).data.session?.provider_token`

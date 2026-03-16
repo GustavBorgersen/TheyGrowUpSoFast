@@ -8,13 +8,16 @@ const WRITE_PROGRESS_END = 75
 
 export function useVideoGenerator() {
   const [encodingProgress, setEncodingProgress] = useState(0)
+  const [encodingFrame, setEncodingFrame] = useState<{ current: number; total: number } | null>(null)
   const [isEncoding, setIsEncoding] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const ffmpegRef = useRef<import('@ffmpeg/ffmpeg').FFmpeg | null>(null)
+  const totalFramesRef = useRef(0)
 
   async function generate(frames: HTMLCanvasElement[], frameDuration: number): Promise<Blob> {
     setIsEncoding(true)
     setEncodingProgress(0)
+    setEncodingFrame(null)
     setError(null)
 
     try {
@@ -36,6 +39,22 @@ export function useVideoGenerator() {
           setEncodingProgress(WRITE_PROGRESS_END + Math.round(clamped * (100 - WRITE_PROGRESS_END)))
         })
 
+        // Parse "frame=N" from FFmpeg stderr to drive 75–100% progress accurately.
+        // The `progress` event is unreliable for image sequences; log lines fire every frame.
+        ffmpeg.on('log', ({ message }) => {
+          const match = message.match(/frame=\s*(\d+)/)
+          if (match) {
+            const encoded = parseInt(match[1], 10)
+            const total = totalFramesRef.current
+            if (total > 0) {
+              setEncodingFrame({ current: encoded, total })
+              setEncodingProgress(
+                WRITE_PROGRESS_END + Math.round(Math.min(1, encoded / total) * (100 - WRITE_PROGRESS_END - 1))
+              )
+            }
+          }
+        })
+
         ffmpegRef.current = ffmpeg
       }
 
@@ -55,7 +74,8 @@ export function useVideoGenerator() {
       const N = Math.round(frameDuration * 2)
       const framerate = `2/${N}`
 
-      // Encode
+      // Encode — set totalFramesRef so the log callback can compute progress ratio
+      totalFramesRef.current = frames.length
       await ffmpeg.exec([
         '-framerate', framerate,
         '-i', 'frame_%04d.jpg',
@@ -76,6 +96,7 @@ export function useVideoGenerator() {
       await ffmpeg.deleteFile('output.mp4').catch(() => {})
 
       setEncodingProgress(100)
+      setEncodingFrame(null)
       return new Blob([data], { type: 'video/mp4' })
     } catch (err) {
       const e = err instanceof Error ? err : new Error(String(err))
@@ -86,5 +107,5 @@ export function useVideoGenerator() {
     }
   }
 
-  return { generate, encodingProgress, isEncoding, error }
+  return { generate, encodingProgress, encodingFrame, isEncoding, error }
 }
