@@ -5,6 +5,12 @@ import { createClient } from '@/lib/supabase/client'
 import type { UnifiedPhoto, Project } from '@/types'
 import type { CreateDispatch } from './useCreateFlow'
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -35,6 +41,7 @@ export function ProjectPanel({ userId, projectId, projectName, photos, reference
   const [newName, setNewName] = useState('')
   const [showNewForm, setShowNewForm] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [projectSizes, setProjectSizes] = useState<Map<string, number>>(new Map())
 
   const supabase = createClient()
 
@@ -43,8 +50,23 @@ export function ProjectPanel({ userId, projectId, projectName, photos, reference
       .from('projects')
       .select('*')
       .order('created_at', { ascending: false })
-    if (data) setProjects(data as Project[])
-  }, [supabase])
+    if (!data) return
+    setProjects(data as Project[])
+
+    // Fetch storage sizes for all projects in parallel
+    const entries = await Promise.all(
+      (data as Project[]).map(async (p) => {
+        const [{ data: frames }, { data: refs }] = await Promise.all([
+          supabase.storage.from('media').list(`frames/${userId}/${p.id}`),
+          supabase.storage.from('media').list(`references/${userId}/${p.id}`),
+        ])
+        const total = [...(frames ?? []), ...(refs ?? [])]
+          .reduce((sum, f) => sum + ((f.metadata as { size?: number } | null)?.size ?? 0), 0)
+        return [p.id, total] as const
+      })
+    )
+    setProjectSizes(new Map(entries))
+  }, [supabase, userId])
 
   const handleToggle = useCallback(async () => {
     if (!expanded) {
@@ -357,31 +379,45 @@ export function ProjectPanel({ userId, projectId, projectName, photos, reference
           {!loading && projects.length > 0 && (
             <div className="space-y-1">
               <p className="text-xs text-zinc-500 uppercase tracking-wide">Your projects</p>
-              {projects.map(p => (
-                <div
-                  key={p.id}
-                  className={`flex items-center gap-1 rounded-lg ${p.id === projectId ? 'bg-zinc-800' : 'hover:bg-zinc-800/60'} transition`}
-                >
-                  <button
-                    onClick={() => handleLoadProject(p)}
-                    disabled={loading}
-                    className={`flex-1 min-w-0 text-left px-3 py-2 text-sm ${p.id === projectId ? 'text-blue-400' : 'text-zinc-300'}`}
+              {projects.map(p => {
+                const size = projectSizes.get(p.id)
+                return (
+                  <div
+                    key={p.id}
+                    className={`flex items-center gap-1 rounded-lg ${p.id === projectId ? 'bg-zinc-800' : 'hover:bg-zinc-800/60'} transition`}
                   >
-                    <span className="truncate block">{p.name}</span>
-                    <span className="text-xs text-zinc-600">{new Date(p.created_at).toLocaleDateString()}</span>
-                  </button>
-                  <button
-                    onClick={() => handleDeleteProject(p)}
-                    className="shrink-0 px-2 py-2 text-zinc-600 hover:text-red-400 transition"
-                    aria-label={`Delete ${p.name}`}
-                    title="Delete project"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
+                    <button
+                      onClick={() => handleLoadProject(p)}
+                      disabled={loading}
+                      className={`flex-1 min-w-0 text-left px-3 py-2 text-sm ${p.id === projectId ? 'text-blue-400' : 'text-zinc-300'}`}
+                    >
+                      <span className="truncate block">{p.name}</span>
+                      <span className="text-xs text-zinc-600">
+                        {new Date(p.created_at).toLocaleDateString()}
+                        {size != null && size > 0 && <span className="ml-2">{formatBytes(size)}</span>}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteProject(p)}
+                      className="shrink-0 px-2 py-2 text-zinc-600 hover:text-red-400 transition"
+                      aria-label={`Delete ${p.name}`}
+                      title="Delete project"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                )
+              })}
+              {projectSizes.size > 0 && (() => {
+                const total = Array.from(projectSizes.values()).reduce((s, n) => s + n, 0)
+                return total > 0 ? (
+                  <p className="pt-1 text-right text-xs text-zinc-600">
+                    Total: {formatBytes(total)}
+                  </p>
+                ) : null
+              })()}
             </div>
           )}
 
