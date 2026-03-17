@@ -109,9 +109,11 @@ function reducer(state: CreateState, action: Action): CreateState {
     case 'ALIGNMENT_DONE':
       return { ...state, step: 'review', alignProgress: null }
     case 'SET_PROFILE_THRESHOLD':
-      return { ...state, profileThreshold: action.value }
+      return { ...state, profileThreshold: action.value,
+               photos: state.photos.map(p => ({ ...p, userOverride: null })) }
     case 'SET_PITCH_THRESHOLD':
-      return { ...state, pitchThreshold: action.value }
+      return { ...state, pitchThreshold: action.value,
+               photos: state.photos.map(p => ({ ...p, userOverride: null })) }
     case 'SET_ALIGN_SIZE':
       return { ...state, alignSize: action.size }
     case 'SET_VIDEO_URL':

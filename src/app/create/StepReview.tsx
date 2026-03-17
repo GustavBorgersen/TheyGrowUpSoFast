@@ -117,34 +117,18 @@ export function StepReview({ photos, profileThreshold, pitchThreshold, dispatch 
                 </div>
               )}
 
-              {isFilteredOut && photo.userOverride !== 'include' && !photo.skipReason && (
-                <div className="absolute inset-0 flex items-end justify-center bg-black/40 p-1">
-                  <span className="rounded bg-amber-900/80 px-1.5 py-0.5 text-[10px] text-amber-300">
-                    Filtered
-                  </span>
-                </div>
-              )}
-
               {photo.userOverride === 'exclude' && (
-                <div className="absolute inset-0 flex items-end justify-center bg-black/40 p-1">
+                <div className="absolute inset-0 flex items-start justify-center bg-black/40 p-1">
                   <span className="rounded bg-zinc-700/80 px-1.5 py-0.5 text-[10px] text-zinc-400">
                     Off
                   </span>
                 </div>
               )}
 
-              {photo.profileScore != null && !photo.skipReason && (
-                <div className="absolute top-1 left-1">
-                  <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-zinc-300">
-                    {(photo.profileScore * 100).toFixed(0)}%
-                  </span>
-                </div>
-              )}
-
-              {photo.pitchScore != null && !photo.skipReason && (
-                <div className="absolute bottom-1 right-1">
-                  <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-zinc-300">
-                    p{(photo.pitchScore * 100).toFixed(0)}%
+              {isFilteredOut && photo.userOverride !== 'include' && !photo.skipReason && (
+                <div className="absolute inset-0 flex items-end justify-center bg-black/40 p-1">
+                  <span className="rounded bg-amber-900/80 px-1.5 py-0.5 text-[10px] text-amber-300">
+                    Filtered
                   </span>
                 </div>
               )}
