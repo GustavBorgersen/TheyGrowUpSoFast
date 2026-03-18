@@ -62,7 +62,7 @@ export function CreateClient({ user, initialProject }: Props) {
   // through Google's cross-origin pages, so popup.closed can fire too early.
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'auth:popup-complete') {
+      if (e.key === 'auth:popup-complete' && e.newValue !== null) {
         localStorage.removeItem('auth:popup-complete')
         router.refresh()
       }

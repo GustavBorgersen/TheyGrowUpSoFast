@@ -99,12 +99,15 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, alignSiz
         thumbCanvas.width = 300
         thumbCanvas.height = thumbH
         thumbCanvas.getContext('2d')!.drawImage(snapshot, 0, 0, 300, thumbH)
+        snapshot.width = 0 // release ~23MB backing store immediately (iOS won't GC promptly)
+
         const thumbBlob = await withTimeout(
           new Promise<Blob>((res, rej) =>
             thumbCanvas.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/jpeg', 0.80)
           ),
           15_000, 'thumbnail export'
         )
+        thumbCanvas.width = 0 // release backing store
         const alignedThumbUrl = URL.createObjectURL(thumbBlob)
 
         dispatch({
@@ -128,6 +131,9 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, alignSiz
         const reason: SkipReason = err instanceof Error && err.message.startsWith('Timeout') ? 'timeout' : 'error'
         dispatch({ type: 'PHOTO_SKIPPED', id: photo.id, reason })
       }
+
+      // Yield to let iOS GC canvas buffers before allocating for the next photo
+      await new Promise(r => setTimeout(r, 0))
     }
 
     abortRef.current = null

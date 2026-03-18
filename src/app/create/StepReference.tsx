@@ -60,6 +60,7 @@ export function StepReference({ photos, referenceId, referencePhotoUrl, referenc
         .withFaceDescriptors()
 
       if (!detections || detections.length === 0) {
+        detectCanvas.width = 0 // release backing store
         setDetectError('No face detected in this photo. Pick another.')
         setDetecting(false)
         return
@@ -68,6 +69,7 @@ export function StepReference({ photos, referenceId, referencePhotoUrl, referenc
       // Pick highest confidence face
       const best = detections.reduce((a, b) => a.detection.score > b.detection.score ? a : b)
       const descriptor = new Float32Array(best.descriptor)
+      detectCanvas.width = 0 // release backing store immediately (iOS won't GC promptly)
 
       const thumbUrl = URL.createObjectURL(photo.originalBlob)
       dispatch({ type: 'SET_REFERENCE', id: photo.id, blob: photo.originalBlob, url: thumbUrl, descriptor })
