@@ -77,7 +77,7 @@ export function ProcessingView({ status, current, total, encodingProgress, encod
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
             <div
-              className="h-full bg-purple-500 transition-all duration-200"
+              className="h-full bg-teal-accent transition-all duration-200"
               style={{ width: `${encodingProgress}%` }}
             />
           </div>

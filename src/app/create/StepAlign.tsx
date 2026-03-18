@@ -7,6 +7,7 @@ import { ALIGN_SIZE_PRESETS } from '@/lib/faceAlign'
 import { ProcessingView } from '@/components/ProcessingView'
 import { withTimeout } from '@/lib/withTimeout'
 import { tfBackendInfo } from '@/hooks/useFaceApi'
+import { AUTH_ENABLED } from '@/lib/features'
 
 type Props = {
   photos: UnifiedPhoto[]
@@ -157,7 +158,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, alignSiz
     abortRef.current?.abort()
   }
 
-  const debugOverlay = diagLog.length > 0 && (
+  const debugOverlay = AUTH_ENABLED && diagLog.length > 0 && (
     <details className="mt-4">
       <summary className="text-xs text-zinc-500 cursor-pointer">Debug info ({diagLog.length} photos) — {tfBackendInfo}</summary>
       <textarea

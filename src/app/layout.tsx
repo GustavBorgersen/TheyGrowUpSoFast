@@ -18,6 +18,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'TheyGrowUpSoFast',
   description: 'Face-aligned timelapse videos — one photo at a time.',
+  icons: { icon: '/favicon.svg' },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

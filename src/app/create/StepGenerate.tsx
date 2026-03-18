@@ -89,7 +89,7 @@ export function StepGenerate({ photos, profileThreshold, pitchThreshold, videoUr
       {/* Frame duration slider */}
       {!encoding && (
         <div className="flex items-center gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3">
-          <label className="text-sm text-zinc-400 shrink-0">Seconds per photo</label>
+          <label className="text-sm text-zinc-400 shrink-0">Speed</label>
           <input
             type="range"
             min={0.5}
@@ -97,9 +97,9 @@ export function StepGenerate({ photos, profileThreshold, pitchThreshold, videoUr
             step={0.5}
             value={frameDuration}
             onChange={e => setFrameDuration(parseFloat(e.target.value))}
-            className="flex-1 accent-teal-accent"
+            className="flex-1 min-w-0 accent-teal-accent"
           />
-          <span className="text-sm text-zinc-300 w-10 text-right">{frameDuration}s</span>
+          <span className="text-sm text-zinc-300 w-8 text-right">{frameDuration}s</span>
         </div>
       )}
 

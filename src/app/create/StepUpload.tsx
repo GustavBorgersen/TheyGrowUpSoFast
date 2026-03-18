@@ -200,9 +200,9 @@ export function StepUpload({ photos, dispatch, isLoggedIn }: Props) {
               </p>
             )
           })()}
-          <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 md:grid-cols-6">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
             {photos.filter(p => p.source.kind !== 'saved').map(photo => (
-              <div key={photo.id} className="relative group aspect-square overflow-hidden rounded-lg bg-zinc-900">
+              <div key={photo.id} className="relative aspect-[4/5] overflow-hidden rounded-lg bg-zinc-900">
                 <img
                   src={photo.thumbnailUrl}
                   alt=""
@@ -211,10 +211,10 @@ export function StepUpload({ photos, dispatch, isLoggedIn }: Props) {
                 />
                 <button
                   onClick={() => dispatch({ type: 'REMOVE_PHOTO', id: photo.id })}
-                  className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/50 transition"
+                  className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white"
                   aria-label="Remove photo"
                 >
-                  <svg className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>

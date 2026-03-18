@@ -60,7 +60,7 @@ export function StepReview({ photos, profileThreshold, pitchThreshold, dispatch 
           step={0.05}
           value={profileThreshold}
           onChange={e => dispatch({ type: 'SET_PROFILE_THRESHOLD', value: parseFloat(e.target.value) })}
-          className="flex-1 accent-teal-accent"
+          className="flex-1 min-w-0 accent-teal-accent"
         />
         <span className="text-sm text-zinc-300 w-12 text-right">{(profileThreshold * 100).toFixed(0)}%</span>
       </div>
@@ -75,7 +75,7 @@ export function StepReview({ photos, profileThreshold, pitchThreshold, dispatch 
           step={0.05}
           value={pitchThreshold}
           onChange={e => dispatch({ type: 'SET_PITCH_THRESHOLD', value: parseFloat(e.target.value) })}
-          className="flex-1 accent-teal-accent"
+          className="flex-1 min-w-0 accent-teal-accent"
         />
         <span className="text-sm text-zinc-300 w-12 text-right">{(pitchThreshold * 100).toFixed(0)}%</span>
       </div>
@@ -133,17 +133,15 @@ export function StepReview({ photos, profileThreshold, pitchThreshold, dispatch 
                 </div>
               )}
 
-              {!photo.skipReason && (
-                <button
-                  onClick={e => { e.stopPropagation(); dispatch({ type: 'REMOVE_ALIGNED', id: photo.id }) }}
-                  className="absolute top-1 right-1 hidden h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white group-hover:flex"
-                  aria-label="Remove aligned data"
-                >
-                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
+              <button
+                onClick={e => { e.stopPropagation(); dispatch({ type: 'REMOVE_ALIGNED', id: photo.id }) }}
+                className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white"
+                aria-label="Remove"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
           )
         })}
