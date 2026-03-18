@@ -8,6 +8,7 @@ import { ProcessingView } from '@/components/ProcessingView'
 import { withTimeout } from '@/lib/withTimeout'
 import { tfBackendInfo } from '@/hooks/useFaceApi'
 import { AUTH_ENABLED } from '@/lib/features'
+import { dbg } from '@/lib/debugLog'
 
 type Props = {
   photos: UnifiedPhoto[]
@@ -50,6 +51,9 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, alignSiz
 
     const toAlign = photos.filter(p => !p.alignedBlob && !p.skipReason)
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const heapNow = () => { const m = (performance as any).memory; return m ? ` heap=${Math.round(m.usedJSHeapSize/1024/1024)}MB` : '' }
+    dbg(`align: start n=${toAlign.length} size=${alignSize} backend=${tfBackendInfo}${heapNow()}`)
     dispatch({ type: 'ALIGN_PROGRESS', current: 0, total: toAlign.length })
 
     for (let i = 0; i < toAlign.length; i++) {
@@ -60,6 +64,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, alignSiz
 
       if (!canvasRef.current) break
 
+      dbg(`align: photo ${i+1}/${toAlign.length} start blob=${Math.round(photo.originalBlob.size/1024)}KB${heapNow()}`)
       let img: HTMLImageElement
       try {
         img = await withTimeout(loadImageFromBlob(photo.originalBlob), 30_000, 'image load')
@@ -67,18 +72,22 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, alignSiz
         const reason: SkipReason = err instanceof Error && err.message.startsWith('Timeout') ? 'timeout' : 'error'
         dispatch({ type: 'PHOTO_SKIPPED', id: photo.id, reason })
         setDiagLog(prev => [...prev, `#${i+1}: SKIP load (${reason})`])
+        dbg(`align: photo ${i+1} skip load (${reason})`)
         continue
       }
 
       try {
+        dbg(`align: photo ${i+1} detection start`)
         const result = await withTimeout(
           detectAndAlign(faceApi, img, canvasRef.current, referenceDescriptor, sizeConfig),
           60_000, 'face detection'
         )
+        dbg(`align: photo ${i+1} detection done${heapNow()}`)
 
         if (result.skipped) {
           dispatch({ type: 'PHOTO_SKIPPED', id: photo.id, reason: result.reason })
           setDiagLog(prev => [...prev, `#${i+1}: SKIP detect (${result.reason})`])
+          dbg(`align: photo ${i+1} skip detect (${result.reason})`)
           continue
         }
 
@@ -86,6 +95,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, alignSiz
         snapshot.width = result.canvas.width
         snapshot.height = result.canvas.height
         snapshot.getContext('2d')!.drawImage(result.canvas, 0, 0)
+        dbg(`align: photo ${i+1} snapshot ${snapshot.width}x${snapshot.height} (~${Math.round(snapshot.width*snapshot.height*4/1024/1024)}MB)${heapNow()}`)
 
         const alignedBlob = await withTimeout(
           new Promise<Blob>((res, rej) =>
@@ -108,6 +118,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, alignSiz
           15_000, 'thumbnail export'
         )
         thumbCanvas.width = 0 // release backing store
+        dbg(`align: photo ${i+1} blobs done${heapNow()}`)
         const alignedThumbUrl = URL.createObjectURL(thumbBlob)
 
         dispatch({
@@ -120,6 +131,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, alignSiz
           pitchScore: result.pitchScore,
         })
 
+        dbg(`align: photo ${i+1} done`)
         if (result.diag) {
           const d = result.diag
           setDiagLog(prev => [...prev,
@@ -130,12 +142,14 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, alignSiz
         console.error('[align] error:', err)
         const reason: SkipReason = err instanceof Error && err.message.startsWith('Timeout') ? 'timeout' : 'error'
         dispatch({ type: 'PHOTO_SKIPPED', id: photo.id, reason })
+        dbg(`align: photo ${i+1} error ${err instanceof Error ? err.message + ' | stack: ' + (err.stack ?? '') : String(err)}`)
       }
 
       // Yield to let iOS GC canvas buffers before allocating for the next photo
       await new Promise(r => setTimeout(r, 0))
     }
 
+    dbg('align: complete')
     abortRef.current = null
     dispatch({ type: 'ALIGNMENT_DONE' })
     runningRef.current = false

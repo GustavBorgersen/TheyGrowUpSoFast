@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { UnifiedPhoto } from '@/types'
 import type { CreateDispatch } from './useCreateFlow'
+import { dbg } from '@/lib/debugLog'
 
 type Props = {
   photos: UnifiedPhoto[]
@@ -24,6 +25,7 @@ export function StepReference({ photos, referenceId, referencePhotoUrl, referenc
     if (!faceApi || detecting) return
     setDetecting(true)
     setDetectError(null)
+    dbg(`ref: pick start blob=${Math.round(photo.originalBlob.size/1024)}KB`)
 
     try {
       // Load image
@@ -44,6 +46,7 @@ export function StepReference({ photos, referenceId, referencePhotoUrl, referenc
       const dw = Math.round(srcW * scale)
       const dh = Math.round(srcH * scale)
 
+      dbg(`ref: canvas ${dw}x${dh} (~${Math.round(dw*dh*4/1024/1024)}MB) from src ${srcW}x${srcH}`)
       const detectCanvas = document.createElement('canvas')
       detectCanvas.width = dw
       detectCanvas.height = dh
@@ -52,6 +55,7 @@ export function StepReference({ photos, referenceId, referencePhotoUrl, referenc
 
       URL.revokeObjectURL(url)
 
+      dbg('ref: detection start')
       // Detect all faces, pick highest confidence
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const detections: any[] = await faceApi
@@ -59,8 +63,13 @@ export function StepReference({ photos, referenceId, referencePhotoUrl, referenc
         .withFaceLandmarks()
         .withFaceDescriptors()
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const heapAfter = (performance as any).memory
+      dbg(`ref: detection done faces=${detections?.length ?? 0}${heapAfter ? ` heap=${Math.round(heapAfter.usedJSHeapSize/1024/1024)}MB` : ''}`)
+
       if (!detections || detections.length === 0) {
         detectCanvas.width = 0 // release backing store
+        dbg('ref: no face')
         setDetectError('No face detected in this photo. Pick another.')
         setDetecting(false)
         return
@@ -73,8 +82,10 @@ export function StepReference({ photos, referenceId, referencePhotoUrl, referenc
 
       const thumbUrl = URL.createObjectURL(photo.originalBlob)
       dispatch({ type: 'SET_REFERENCE', id: photo.id, blob: photo.originalBlob, url: thumbUrl, descriptor })
+      dbg('ref: done')
     } catch (err) {
       console.error('[reference] detection error:', err)
+      dbg(`ref: error ${err instanceof Error ? err.message + ' | stack: ' + (err.stack ?? '') : String(err)}`)
       setDetectError('Face detection failed. Try another photo.')
     } finally {
       setDetecting(false)

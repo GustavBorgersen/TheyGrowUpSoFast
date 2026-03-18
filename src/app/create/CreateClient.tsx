@@ -14,6 +14,7 @@ import { StepReview } from './StepReview'
 import { StepGenerate } from './StepGenerate'
 import { ProjectPanel } from './ProjectPanel'
 import { AUTH_ENABLED } from '@/lib/features'
+import { dbg, getDbgLog, clearDbgLog } from '@/lib/debugLog'
 
 function GoogleIcon() {
   return (
@@ -70,6 +71,44 @@ export function CreateClient({ user, initialProject }: Props) {
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
   }, [router])
+
+  // Debug log panel
+  const [showDebugLog, setShowDebugLog] = useState(false)
+  const [debugLog, setDebugLog] = useState<string[]>([])
+
+  // Capture global errors + page-load marker, persist to localStorage
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mem = (performance as any).memory
+    const heapStr = mem ? ` heap=${Math.round(mem.usedJSHeapSize/1024/1024)}MB/${Math.round(mem.jsHeapSizeLimit/1024/1024)}MB` : ''
+    const devMem = `devMem=${(navigator as any).deviceMemory ?? '?'}GB`
+    dbg(`page loaded | ${devMem}${heapStr} | screen=${screen.width}x${screen.height} dpr=${window.devicePixelRatio}`)
+    dbg(`ua: ${navigator.userAgent}`)
+
+    const onError = (e: ErrorEvent) =>
+      dbg(`onerror: ${e.message} @ ${e.filename}:${e.lineno}\n${e.error?.stack ?? ''}`)
+    const onUnhandled = (e: PromiseRejectionEvent) => {
+      const r = e.reason
+      dbg(`unhandled: ${r instanceof Error ? r.message + ' | stack: ' + (r.stack ?? '') : String(r)}`)
+    }
+    // pagehide fires when iOS suspends/kills the tab — critical for diagnosing OOM kills
+    const onPageHide = () => dbg('pagehide fired (tab suspended or killed by OS)')
+    const onVisibility = () => dbg(`visibility: ${document.visibilityState}`)
+    const onBeforeUnload = () => dbg('beforeunload fired')
+
+    window.addEventListener('error', onError)
+    window.addEventListener('unhandledrejection', onUnhandled)
+    window.addEventListener('pagehide', onPageHide)
+    window.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => {
+      window.removeEventListener('error', onError)
+      window.removeEventListener('unhandledrejection', onUnhandled)
+      window.removeEventListener('pagehide', onPageHide)
+      window.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('beforeunload', onBeforeUnload)
+    }
+  }, [])
 
   const [expandedSteps, setExpandedSteps] = useState<Set<CreateStep>>(
     () => new Set(initialProject ? ['review'] : ['upload'])
@@ -271,6 +310,49 @@ export function CreateClient({ user, initialProject }: Props) {
           </div>
         )}
       </motion.div>
+
+      {/* Debug log panel — only in dev/preview (AUTH_ENABLED) */}
+      {AUTH_ENABLED && (
+        <>
+          <button
+            onClick={() => { setDebugLog(getDbgLog()); setShowDebugLog(true) }}
+            className="fixed bottom-4 right-4 z-50 rounded-full bg-zinc-800 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-700 transition shadow-lg"
+          >
+            Debug log
+          </button>
+
+          {showDebugLog && (
+            <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/60" onClick={() => setShowDebugLog(false)}>
+              <div className="w-full max-w-lg rounded-2xl bg-zinc-900 border border-zinc-700 p-4 space-y-3" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-zinc-200">Crash log ({debugLog.length} entries)</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { navigator.clipboard?.writeText(debugLog.join('\n')) }}
+                      className="rounded-lg bg-zinc-700 px-3 py-1 text-xs text-zinc-200 hover:bg-zinc-600 transition"
+                    >
+                      Copy
+                    </button>
+                    <button
+                      onClick={() => { clearDbgLog(); setDebugLog([]) }}
+                      className="rounded-lg bg-zinc-700 px-3 py-1 text-xs text-zinc-400 hover:bg-zinc-600 transition"
+                    >
+                      Clear
+                    </button>
+                    <button onClick={() => setShowDebugLog(false)} className="text-zinc-500 hover:text-zinc-300 px-1">✕</button>
+                  </div>
+                </div>
+                <textarea
+                  readOnly
+                  value={debugLog.join('\n') || '(empty)'}
+                  className="w-full h-64 text-xs font-mono bg-zinc-950 text-zinc-300 border border-zinc-700 rounded-lg p-2 resize-none select-all"
+                  onFocus={e => e.target.select()}
+                />
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </main>
   )
 }
