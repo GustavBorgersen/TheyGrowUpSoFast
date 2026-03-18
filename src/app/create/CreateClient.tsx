@@ -13,6 +13,7 @@ import { StepAlign } from './StepAlign'
 import { StepReview } from './StepReview'
 import { StepGenerate } from './StepGenerate'
 import { ProjectPanel } from './ProjectPanel'
+import { AUTH_ENABLED } from '@/lib/features'
 
 function GoogleIcon() {
   return (
@@ -169,7 +170,7 @@ export function CreateClient({ user, initialProject }: Props) {
         )}
 
         {/* Auth CTA for guests (compact) */}
-        {!isLoggedIn && (
+        {AUTH_ENABLED && !isLoggedIn && (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 flex items-center justify-between gap-4">
             <p className="text-sm text-zinc-400">Sign in to save projects and import from Google Photos</p>
             <button

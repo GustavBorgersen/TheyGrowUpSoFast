@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import type { UnifiedPhoto } from '@/types'
 import type { CreateDispatch } from './useCreateFlow'
 import { useGooglePhotosPicker } from '@/hooks/useGooglePhotosPicker'
+import { AUTH_ENABLED } from '@/lib/features'
 
 function openAuthPopup() {
   window.open('/login?popup=1', '_blank', 'popup,width=500,height=700')
@@ -164,7 +165,7 @@ export function StepUpload({ photos, dispatch, isLoggedIn }: Props) {
       </label>
 
       {/* Google Photos import */}
-      {isLoggedIn ? (
+      {AUTH_ENABLED && (isLoggedIn ? (
         <button
           onClick={handleGooglePhotos}
           disabled={pickerOpen || importing}
@@ -179,7 +180,7 @@ export function StepUpload({ photos, dispatch, isLoggedIn }: Props) {
         >
           Sign in to import from Google Photos
         </button>
-      )}
+      ))}
 
       {pickerError && (
         <p className="rounded-lg bg-red-950 px-4 py-3 text-sm text-red-300">{pickerError}</p>
