@@ -67,6 +67,9 @@ Key design: "Explicit Reference → Store Aligned → Filter at Generate"
 ### Phase 6 — Mobile Polish + Error Handling 🔲
 Error boundaries, iOS video fixes, exponential backoff on uploads.
 
+Completed items:
+- Web Share API button in VideoPlayer — mobile share sheet (WhatsApp, AirDrop, Messages, etc.); gracefully hidden on unsupported browsers
+
 ### Phase 7 — Deployment 🔲
 Vercel env vars, Supabase Google OAuth, storage RLS, Google Cloud Console verification.
 

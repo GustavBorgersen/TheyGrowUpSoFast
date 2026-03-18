@@ -50,7 +50,7 @@ Selector is disabled once alignment is running.
 4. Remove unwanted photos by hovering and clicking X
 5. Click "Generate timelapse (N photos)"
 6. Progress: step label + frame N/M progress bar
-7. Done: video player appears with download button; skipped photos marked on grid
+7. Done: video player appears with Download and Share buttons; skipped photos marked on grid
 8. Add more photos → "Regenerate" → video overwrites
 9. CTA: "Sign in" banner (opens popup — never navigates away from `/create`)
 
@@ -76,6 +76,7 @@ Selector is disabled once alignment is running.
 - Warn if >100 photos uploaded on mobile
 - Browser compatibility warning for SharedArrayBuffer shown only if encoding actually fails
 - Video player uses `<video playsinline muted controls>` (iOS requires `playsinline`)
+- Share button appears next to Download when `navigator.share` is available (Web Share API Level 2); hidden on unsupported browsers; user cancel is silent
 - Skipped photos indicated inline on thumbnail grid (not in a separate list)
 - Photos persist after generation so user can add more and regenerate
 
