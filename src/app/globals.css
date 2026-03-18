@@ -1,1 +1,59 @@
 @import "tailwindcss";
+
+@theme {
+  --color-teal-accent: #20B2AA;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    font-weight: 400;
+    line-height: 1.6;
+  }
+
+  h1, h2, h3, h4, h5 {
+    font-family: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.02em;
+  }
+
+  h1 { font-weight: 600; }
+  h2, h3 { font-weight: 500; }
+}
+
+/* Focus-visible ring */
+*:focus-visible {
+  outline: 2px solid #20B2AA;
+  outline-offset: 2px;
+}
+
+/* Active press scale */
+button:active,
+a:active {
+  transform: scale(0.98);
+}
+
+/* Card with layered shadow + subtle edge ring */
+.card-shadow {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.08),
+    0 4px 12px rgba(0, 0, 0, 0.30);
+}
+
+/* Hero ambient glow animation */
+.hero-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 80% 60% at 50% 40%,
+    rgba(32, 178, 170, 0.10) 0%,
+    transparent 70%
+  );
+  animation: hero-pulse 8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes hero-pulse {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1;   }
+}

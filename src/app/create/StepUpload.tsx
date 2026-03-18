@@ -137,7 +137,7 @@ export function StepUpload({ photos, dispatch, isLoggedIn }: Props) {
       {/* Drop zone */}
       <label
         className={`flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-8 transition cursor-pointer ${
-          isDragging ? 'border-blue-500 bg-blue-950/20' : 'border-zinc-700 hover:border-zinc-500'
+          isDragging ? 'border-teal-accent bg-teal-accent/10' : 'border-zinc-700 hover:border-zinc-500'
         } ${photos.length > 0 ? 'py-5' : 'py-10'}`}
         onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
         onDragLeave={() => setIsDragging(false)}

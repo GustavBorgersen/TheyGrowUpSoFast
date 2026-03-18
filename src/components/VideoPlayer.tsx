@@ -21,7 +21,7 @@ export function VideoPlayer({ src, filename = 'timelapse.mp4' }: Props) {
         <a
           href={src}
           download={filename}
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-3 text-sm font-medium text-white hover:bg-blue-500 transition"
+          className="inline-flex items-center gap-2 rounded-lg bg-teal-accent px-6 py-3 text-sm font-medium text-zinc-950 hover:bg-teal-accent/90 transition"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />

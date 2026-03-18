@@ -60,7 +60,7 @@ export function StepReview({ photos, profileThreshold, pitchThreshold, dispatch 
           step={0.05}
           value={profileThreshold}
           onChange={e => dispatch({ type: 'SET_PROFILE_THRESHOLD', value: parseFloat(e.target.value) })}
-          className="flex-1 accent-blue-500"
+          className="flex-1 accent-teal-accent"
         />
         <span className="text-sm text-zinc-300 w-12 text-right">{(profileThreshold * 100).toFixed(0)}%</span>
       </div>
@@ -75,7 +75,7 @@ export function StepReview({ photos, profileThreshold, pitchThreshold, dispatch 
           step={0.05}
           value={pitchThreshold}
           onChange={e => dispatch({ type: 'SET_PITCH_THRESHOLD', value: parseFloat(e.target.value) })}
-          className="flex-1 accent-blue-500"
+          className="flex-1 accent-teal-accent"
         />
         <span className="text-sm text-zinc-300 w-12 text-right">{(pitchThreshold * 100).toFixed(0)}%</span>
       </div>

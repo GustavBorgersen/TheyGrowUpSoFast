@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { motion } from 'framer-motion'
 import { useFaceApi } from '@/hooks/useFaceApi'
 import type { CreateStep, UnifiedPhoto } from '@/types'
 import { useCreateFlow } from './useCreateFlow'
@@ -115,25 +116,45 @@ export function CreateClient({ user, initialProject }: Props) {
     }
   }, [state])
 
+  const containerVariants = {
+    hidden: {},
+    visible: { transition: { staggerChildren: 0.08 } },
+  }
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 16 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] as const } },
+  }
+
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
       {/* Hero */}
-      <section className="px-4 pt-16 pb-10 text-center">
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
-          Watch them grow — <span className="text-blue-400">one photo at a time</span>
+      <section className="relative overflow-hidden px-4 pt-16 pb-10 text-center">
+        <div className="hero-glow" />
+        <h1
+          className="relative text-3xl font-semibold sm:text-4xl lg:text-5xl"
+          style={{ textShadow: '0px 2px 4px rgba(0,0,0,0.5)' }}
+        >
+          Watch them grow —{' '}
+          <span className="text-teal-accent">one photo at a time</span>
         </h1>
-        <p className="mx-auto mt-4 max-w-lg text-base text-zinc-400">
+        <p className="relative mx-auto mt-4 max-w-lg text-base text-zinc-400">
           Upload photos of someone over the years. We align each face and turn them into a
           smooth timelapse video — all in your browser.
         </p>
-        <div className="mx-auto mt-8 flex max-w-md justify-center gap-6 text-sm text-zinc-500">
+        <div className="relative mx-auto mt-8 flex max-w-md justify-center gap-6 text-sm text-zinc-500">
           <span><span className="font-semibold text-zinc-300">1.</span> Upload</span>
           <span><span className="font-semibold text-zinc-300">2.</span> Align</span>
           <span><span className="font-semibold text-zinc-300">3.</span> Download</span>
         </div>
       </section>
 
-      <div className="mx-auto max-w-2xl space-y-4 px-4 pb-12">
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="mx-auto max-w-2xl space-y-4 px-4 pb-12"
+      >
         {/* Project panel for logged-in users */}
         {isLoggedIn && (
           <ProjectPanel
@@ -175,8 +196,8 @@ export function CreateClient({ user, initialProject }: Props) {
 
         {/* Accordion steps */}
         {STEPS.map(({ key, title, number }) => (
+          <motion.div key={key} variants={itemVariants}>
           <AccordionStep
-            key={key}
             title={title}
             stepNumber={number}
             expanded={expandedSteps.has(key)}
@@ -236,6 +257,7 @@ export function CreateClient({ user, initialProject }: Props) {
               />
             )}
           </AccordionStep>
+          </motion.div>
         ))}
 
         {/* User info + sign out for logged-in users */}
@@ -247,7 +269,7 @@ export function CreateClient({ user, initialProject }: Props) {
             </form>
           </div>
         )}
-      </div>
+      </motion.div>
     </main>
   )
 }

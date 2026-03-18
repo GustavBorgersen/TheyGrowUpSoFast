@@ -97,7 +97,7 @@ export function StepGenerate({ photos, profileThreshold, pitchThreshold, videoUr
             step={0.5}
             value={frameDuration}
             onChange={e => setFrameDuration(parseFloat(e.target.value))}
-            className="flex-1 accent-blue-500"
+            className="flex-1 accent-teal-accent"
           />
           <span className="text-sm text-zinc-300 w-10 text-right">{frameDuration}s</span>
         </div>
@@ -107,7 +107,7 @@ export function StepGenerate({ photos, profileThreshold, pitchThreshold, videoUr
         <button
           onClick={handleGenerate}
           disabled={includedPhotos.length === 0}
-          className="w-full rounded-xl bg-blue-600 py-4 text-base font-semibold text-white hover:bg-blue-500 disabled:opacity-50 transition min-h-[44px]"
+          className="w-full rounded-xl bg-teal-accent py-4 text-base font-semibold text-zinc-950 hover:bg-teal-accent/90 disabled:opacity-50 transition min-h-[44px]"
         >
           Generate video ({includedPhotos.length} photo{includedPhotos.length !== 1 ? 's' : ''})
         </button>

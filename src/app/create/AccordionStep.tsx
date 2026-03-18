@@ -11,13 +11,16 @@ type Props = {
 
 export function AccordionStep({ title, stepNumber, expanded, onToggle, subtitle, children }: Props) {
   return (
-    <div className={`rounded-xl border ${expanded ? 'border-zinc-700 bg-zinc-900/50' : 'border-zinc-800 bg-zinc-900/30'}`}>
+    <div className={`rounded-xl card-shadow ${expanded ? 'bg-zinc-900/70' : 'bg-zinc-900/30'}`}>
       <button
         type="button"
         onClick={onToggle}
         className="flex w-full items-center gap-3 px-5 py-4 text-left cursor-pointer"
       >
-        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${expanded ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400'}`}>
+        <span
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${expanded ? 'text-white' : 'bg-zinc-800 text-zinc-400'}`}
+          style={expanded ? { backgroundColor: '#20B2AA', color: '#09090B' } : undefined}
+        >
           {stepNumber}
         </span>
         <div className="flex-1 min-w-0">

@@ -235,7 +235,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, alignSiz
               disabled={isRunning || !faceApiLoaded}
               className={`flex-1 rounded-lg border py-2 text-sm font-medium transition disabled:opacity-50 ${
                 alignSize === key
-                  ? 'border-blue-500 bg-blue-600 text-white'
+                  ? 'border-teal-accent bg-teal-accent text-zinc-950'
                   : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
               }`}
             >
@@ -252,7 +252,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, alignSiz
       <button
         onClick={handleStart}
         disabled={!faceApiLoaded}
-        className="w-full rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50 transition min-h-[44px]"
+        className="w-full rounded-xl bg-teal-accent py-3 text-sm font-semibold text-zinc-950 hover:bg-teal-accent/90 disabled:opacity-50 transition min-h-[44px]"
       >
         {!faceApiLoaded ? 'Loading face detection...' : `Start alignment (${unalignedCount} photo${unalignedCount !== 1 ? 's' : ''})`}
       </button>

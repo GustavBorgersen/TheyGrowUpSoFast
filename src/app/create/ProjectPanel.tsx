@@ -362,13 +362,13 @@ export function ProjectPanel({ userId, projectId, projectName, photos, reference
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
                   placeholder="Project name"
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-teal-accent focus:outline-none"
                 />
               )}
               <button
                 onClick={handleSave}
                 disabled={saving || (showNewForm && !newName.trim())}
-                className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition min-h-[44px]"
+                className="w-full rounded-lg bg-teal-accent px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-teal-accent/90 disabled:opacity-50 transition min-h-[44px]"
               >
                 {saving ? 'Saving...' : projectId ? 'Save changes' : 'Save as new project'}
               </button>
@@ -389,7 +389,7 @@ export function ProjectPanel({ userId, projectId, projectName, photos, reference
                     <button
                       onClick={() => handleLoadProject(p)}
                       disabled={loading}
-                      className={`flex-1 min-w-0 text-left px-3 py-2 text-sm ${p.id === projectId ? 'text-blue-400' : 'text-zinc-300'}`}
+                      className={`flex-1 min-w-0 text-left px-3 py-2 text-sm ${p.id === projectId ? 'text-teal-accent' : 'text-zinc-300'}`}
                     >
                       <span className="truncate block">{p.name}</span>
                       <span className="text-xs text-zinc-600">

@@ -122,7 +122,7 @@ export function StepReference({ photos, referenceId, referencePhotoUrl, referenc
         <p className="text-sm text-red-400">{detectError}</p>
       )}
       {detecting && (
-        <p className="text-sm text-blue-400">Detecting face...</p>
+        <p className="text-sm text-teal-accent">Detecting face...</p>
       )}
       <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 md:grid-cols-6">
         {newPhotos.map(photo => {
@@ -133,7 +133,7 @@ export function StepReference({ photos, referenceId, referencePhotoUrl, referenc
               onClick={() => handlePick(photo)}
               disabled={!faceApiLoaded || detecting}
               className={`relative aspect-square overflow-hidden rounded-lg bg-zinc-900 transition ${
-                isSelected ? 'ring-2 ring-blue-500' : 'hover:ring-2 hover:ring-zinc-600'
+                isSelected ? 'ring-2 ring-teal-accent' : 'hover:ring-2 hover:ring-zinc-600'
               } ${(!faceApiLoaded || detecting) ? 'opacity-50' : ''}`}
             >
               <img
@@ -143,8 +143,8 @@ export function StepReference({ photos, referenceId, referencePhotoUrl, referenc
                 className="h-full w-full object-cover"
               />
               {isSelected && (
-                <div className="absolute inset-x-0 bottom-0 bg-blue-600/90 px-1 py-0.5 text-center">
-                  <span className="text-[10px] font-medium text-white">Reference</span>
+                <div className="absolute inset-x-0 bottom-0 bg-teal-accent/90 px-1 py-0.5 text-center">
+                  <span className="text-[10px] font-medium text-zinc-950">Reference</span>
                 </div>
               )}
             </button>

@@ -1,7 +1,7 @@
 # TheyGrowUpSoFast — Technical Spec
 
 ## Stack
-- **Frontend**: Next.js 16.1.6 (webpack mode), React 19, TypeScript, Tailwind CSS 4
+- **Frontend**: Next.js 16.1.6 (webpack mode), React 19, TypeScript, Tailwind CSS 4, Framer Motion
 - **Auth + DB**: Supabase (Google OAuth, Postgres, RLS)
 - **Storage**: Supabase Storage (`media` bucket, private)
 - **Face detection**: `@vladmandic/face-api` (nobundle build, shares TF.js instance with WASM backend)
@@ -218,6 +218,41 @@ public/wasm/tfjs-backend-wasm-threaded-simd.wasm  ← from @tensorflow/tfjs-back
 7. Add redirect URI: `https://<your-supabase-project>.supabase.co/auth/v1/callback`
    (Supabase handles the OAuth redirect, not your app directly)
 8. App requires verification for >100 users — includes video demo of Photos usage per Google policy
+
+## Design System
+
+### Fonts
+Loaded via `next/font/google`, exposed as CSS variables on `<html>`:
+- `--font-outfit` — headings (h1–h5). h1: weight 600; h2–h3: weight 500; letter-spacing: -0.02em
+- `--font-inter` — body text. Weight 400, line-height 1.6
+
+Applied in `globals.css` `@layer base`. Tailwind utility classes control font-size and responsive scaling; the CSS layer controls font-family and letter-spacing so they aren't overridden.
+
+### Accent color
+`#20B2AA` (teal). Registered as `--color-teal-accent` in `@theme` so Tailwind generates all utilities (`bg-teal-accent`, `text-teal-accent`, `accent-teal-accent`, `ring-teal-accent`, etc.).
+
+Used on: active step indicator circles, hero highlight text, all primary buttons, slider thumb, drag-drop active border, progress bar fill, reference photo selection ring, active project label.
+
+**Contrast**: teal background with dark text (`text-zinc-950`) — ~8.3:1. Never white text on teal (fails WCAG at ~2.5:1).
+
+### Interactive states (global, `globals.css`)
+- `*:focus-visible` — `outline: 2px solid #20B2AA; outline-offset: 2px`
+- `button:active, a:active` — `transform: scale(0.98)`
+
+### Cards
+Border replaced with layered box-shadow: `0 0 0 1px rgba(255,255,255,0.06), 0 1px 2px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.30)` — applied via `.card-shadow` CSS class.
+
+### Animations
+Step cards use Framer Motion staggered fade-up on page load:
+- `opacity: 0 → 1`, `translateY: 16px → 0`
+- Duration: 400ms, easing: `cubic-bezier(0.16, 1, 0.3, 1)`
+- Stagger: 80ms between cards
+- Container variants on the outer `motion.div`; item variants on each `motion.div` wrapping an `AccordionStep`
+
+### Hero section
+- `position: relative; overflow: hidden` to contain the glow layer
+- `.hero-glow` — absolute-positioned `radial-gradient` (teal, 10% opacity) with an 8s `opacity` keyframe animation (breathes 0.5 → 1 → 0.5)
+- `text-shadow: 0px 2px 4px rgba(0,0,0,0.5)` on h1 for legibility over the glow
 
 ## Known Gotchas
 1. **COOP = `same-origin-allow-popups`** — not `same-origin`
