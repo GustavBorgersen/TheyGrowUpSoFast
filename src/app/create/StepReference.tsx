@@ -78,9 +78,20 @@ export function StepReference({ photos, referenceId, referencePhotoUrl, referenc
       // Pick highest confidence face
       const best = detections.reduce((a, b) => a.detection.score > b.detection.score ? a : b)
       const descriptor = new Float32Array(best.descriptor)
+
+      // Export the downscaled detect canvas as the preview image.
+      // Do NOT use photo.originalBlob for display — on a 4284×5712 source that
+      // decodes to ~98MB and OOM-kills the iOS tab when the <img> renders.
+      const previewBlob = await new Promise<Blob>((res, rej) =>
+        detectCanvas.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/jpeg', 0.85)
+      )
       detectCanvas.width = 0 // release backing store immediately (iOS won't GC promptly)
 
-      const thumbUrl = URL.createObjectURL(photo.originalBlob)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const heapAfterExport = (performance as any).memory
+      dbg(`ref: preview exported ${Math.round(previewBlob.size/1024)}KB${heapAfterExport ? ` heap=${Math.round(heapAfterExport.usedJSHeapSize/1024/1024)}MB` : ''}`)
+
+      const thumbUrl = URL.createObjectURL(previewBlob)
       dispatch({ type: 'SET_REFERENCE', id: photo.id, blob: photo.originalBlob, url: thumbUrl, descriptor })
       dbg('ref: done')
     } catch (err) {

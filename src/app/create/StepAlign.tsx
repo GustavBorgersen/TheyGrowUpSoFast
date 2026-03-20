@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import type { UnifiedPhoto, SkipReason, AlignSizeKey } from '@/types'
 import type { CreateDispatch } from './useCreateFlow'
-import { ALIGN_SIZE_PRESETS } from '@/lib/faceAlign'
+import { ALIGN_SIZE_PRESETS, DETECT_MAX_W } from '@/lib/faceAlign'
 import { ProcessingView } from '@/components/ProcessingView'
 import { withTimeout } from '@/lib/withTimeout'
 import { tfBackendInfo } from '@/hooks/useFaceApi'
@@ -76,12 +76,37 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, alignSiz
         continue
       }
 
+      // Pre-downscale to cap the source canvas size before face detection.
+      // The full-res HTMLImageElement decode (~98MB for a 4284×5712 photo) lives in the JS
+      // heap and cannot be evicted by iOS — it will OOM-kill the tab. Drawing into a capped
+      // canvas first lets us release the large decode before the detection tensors allocate.
+      // Limit = max(DETECT_MAX_W, canvasW) so we never upscale for the output draw step.
+      const naturalW = img.naturalWidth || img.width
+      const naturalH = img.naturalHeight || img.height
+      const maxSrc = Math.max(DETECT_MAX_W, sizeConfig.canvasW)
+      let srcCanvas: HTMLCanvasElement | null = null
+      let srcForAlign: HTMLImageElement | HTMLCanvasElement = img
+
+      if (Math.max(naturalW, naturalH) > maxSrc) {
+        const s = maxSrc / Math.max(naturalW, naturalH)
+        const sw = Math.round(naturalW * s)
+        const sh = Math.round(naturalH * s)
+        srcCanvas = document.createElement('canvas')
+        srcCanvas.width = sw
+        srcCanvas.height = sh
+        srcCanvas.getContext('2d')!.drawImage(img, 0, 0, sw, sh)
+        img.src = '' // hint iOS GC to free the ~98MB full-res decode
+        dbg(`align: photo ${i+1} pre-downscale ${naturalW}x${naturalH}→${sw}x${sh} (~${Math.round(sw*sh*4/1024/1024)}MB)${heapNow()}`)
+        srcForAlign = srcCanvas
+      }
+
       try {
         dbg(`align: photo ${i+1} detection start`)
         const result = await withTimeout(
-          detectAndAlign(faceApi, img, canvasRef.current, referenceDescriptor, sizeConfig),
+          detectAndAlign(faceApi, srcForAlign, canvasRef.current, referenceDescriptor, sizeConfig),
           60_000, 'face detection'
         )
+        if (srcCanvas) { srcCanvas.width = 0; srcCanvas = null } // release source canvas immediately
         dbg(`align: photo ${i+1} detection done${heapNow()}`)
 
         if (result.skipped) {
@@ -139,6 +164,7 @@ export function StepAlign({ photos, referenceDescriptor, alignProgress, alignSiz
           ])
         }
       } catch (err) {
+        if (srcCanvas) { srcCanvas.width = 0 } // ensure release on error path
         console.error('[align] error:', err)
         const reason: SkipReason = err instanceof Error && err.message.startsWith('Timeout') ? 'timeout' : 'error'
         dispatch({ type: 'PHOTO_SKIPPED', id: photo.id, reason })

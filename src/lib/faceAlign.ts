@@ -20,7 +20,7 @@ export const ALIGN_SIZE_PRESETS = {
 } as const satisfies Record<AlignSizeKey, { canvasW: number; canvasH: number; targetIpd: number }>
 
 const MATCH_THRESHOLD = 0.6
-const DETECT_MAX_W = 1600
+export const DETECT_MAX_W = 1600
 
 export type AlignDiag = {
   srcW: number; srcH: number
